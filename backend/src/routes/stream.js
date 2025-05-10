@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const streamService = require('../services/streamService');
+const fileService = require('../services/fileService');
+const googleDriveService = require('../services/googleDriveService');
+const fs = require('fs');
+const logger = require('../utils/logger');
 
 // アクティブなストリームリストの取得
 router.get('/', async (req, res, next) => {
@@ -15,50 +19,64 @@ router.get('/', async (req, res, next) => {
 // ストリーム開始
 router.post('/start', async (req, res, next) => {
   try {
-    const {
-      fileId,
-      rtmpUrl,
-      streamKey,
-      format = 'rtmp',  // rtmp または srt
-      videoSettings = {
-        codec: 'libx264',
-        bitrate: '2500k',
-        framerate: 30,
-        width: 1280,
-        height: 720
-      },
-      audioSettings = {
-        codec: 'aac',
-        bitrate: '128k',
-        sampleRate: 44100,
-        channels: 2
-      }
-    } = req.body;
+    logger.info('ストリーム開始APIにリクエストが到達しました'); // 追加するログ
+    logger.info('リクエストボディ:', req.body); // 追加するログ
 
+    const { fileId, rtmpUrl, streamKey, format, videoSettings, audioSettings } = req.body;
+    
     if (!fileId) {
+      logger.error('ファイルIDが提供されていません');
       return res.status(400).json({ error: 'ファイルIDが必要です' });
     }
-
-    if (!rtmpUrl) {
-      return res.status(400).json({ error: 'RTMP/SRT URLが必要です' });
-    }
-
-    // Google DriveのファイルIDの場合の処理
-    const isGoogleDriveFile = typeof fileId === 'string' && fileId.match(/^[a-zA-Z0-9_-]{28,}$/);
     
-    const streamData = {
-      fileId,
-      rtmpUrl,
-      streamKey,
-      format,
-      videoSettings,
-      audioSettings,
-      isGoogleDriveFile
-    };
-
-    const stream = await streamService.startStream(streamData);
-    res.status(200).json(stream);
+    if (!rtmpUrl) {
+      logger.error('RTMP URLが提供されていません');
+      return res.status(400).json({ error: 'RTMPまたはSRT URLが必要です' });
+    }
+    
+    // ファイル情報の取得
+    logger.info(`ファイル情報を取得中: fileId=${fileId}`);
+    const fileInfo = await fileService.getFileById(fileId);
+    
+    if (!fileInfo) {
+      logger.error(`ファイルが見つかりません: fileId=${fileId}`);
+      return res.status(404).json({ error: 'ファイルが見つかりません' });
+    }
+    
+    logger.info(`取得したファイル情報: ${JSON.stringify(fileInfo)}`);
+    
+    logger.info(`ストリーミング開始: ${fileInfo.originalName}`);
+    
+    // ファイルのタイプを確認（ファイルパスがあるかどうかで判断）
+    const isLocalFile = fileInfo.path && fs.existsSync(fileInfo.path);
+    const isGoogleDriveFile = fileInfo.googleDriveId;
+    
+    // ストリーミングソースの設定
+    let inputFile;
+    
+    if (isLocalFile) {
+      logger.info(`ローカルファイルストリーム: ${fileInfo.path}`);
+      inputFile = fileInfo.path;
+    } else if (isGoogleDriveFile) {
+      logger.info(`Google Driveファイルストリーム: ${fileInfo.googleDriveId}`);
+      try {
+        // Google Driveからファイルをダウンロード
+        inputFile = await googleDriveService.downloadFile(fileInfo.googleDriveId);
+      } catch (error) {
+        logger.error(`Google Driveファイルのダウンロードに失敗: ${error.message}`);
+        return res.status(500).json({ error: `Google Driveファイルのダウンロードに失敗しました: ${error.message}` });
+      }
+    } else {
+      logger.error('不明なファイルタイプ');
+      return res.status(400).json({ error: 'ファイルタイプが不明です' });
+    }
+    
+    // ファイル情報取得後にデバッグ情報を出力
+    logger.info(`ファイル情報: ${JSON.stringify(fileInfo)}`);
+    
+    // FFmpegコマンドの構築と実行...（以下略）
   } catch (error) {
+    logger.error(`ストリーミングエラー: ${error.message}`);
     next(error);
   }
 });

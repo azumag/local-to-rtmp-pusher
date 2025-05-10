@@ -53,9 +53,11 @@ function LocalFilesPage() {
     setLoading(true);
     try {
       const response = await listFiles();
-      setFiles(response.data);
+      // レスポンスが配列であることを確認
+      setFiles(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('ファイル一覧の取得に失敗しました', error);
+      setFiles([]); // エラー時は空配列をセット
     } finally {
       setLoading(false);
     }
@@ -77,7 +79,7 @@ function LocalFilesPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-
+      
       await uploadFile(formData, (progressEvent) => {
         const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         setUploadProgress(progress);
@@ -85,8 +87,12 @@ function LocalFilesPage() {
 
       // ファイル一覧を更新
       fetchFiles();
+      // 成功メッセージ
+      alert(`ファイル "${file.name}" のアップロードに成功しました`);
     } catch (error) {
       console.error('ファイルのアップロードに失敗しました', error);
+      // エラーメッセージをユーザーに表示
+      alert(`エラー: ${error.response?.data?.error || error.message || 'ファイルのアップロードに失敗しました'}`);
     } finally {
       setUploading(false);
     }
@@ -124,6 +130,8 @@ function LocalFilesPage() {
         videoSettings,
         audioSettings
       };
+
+      console.log('ストリーム開始リクエストデータ:', streamData); // 追加するログ
 
       const response = await startStream(streamData);
       console.log('ストリーミングを開始しました', response.data);
@@ -175,7 +183,14 @@ function LocalFilesPage() {
           <Typography variant="body2" sx={{ mb: 1 }}>
             アップロード中... {uploadProgress}%
           </Typography>
-          <LinearProgress variant="determinate" value={uploadProgress} />
+          <LinearProgress 
+            variant="determinate" 
+            value={uploadProgress} 
+            sx={{ height: 10, borderRadius: 5 }}
+          />
+          <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
+            ファイルサイズによっては時間がかかる場合があります。しばらくお待ちください。
+          </Typography>
         </Paper>
       )}
       
@@ -187,15 +202,7 @@ function LocalFilesPage() {
         <LinearProgress />
       ) : (
         <Grid container spacing={3}>
-          {files.length === 0 ? (
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body1">
-                  まだファイルがアップロードされていません。
-                </Typography>
-              </Paper>
-            </Grid>
-          ) : (
+          {files && Array.isArray(files) && files.length > 0 ? (
             files.map((file) => (
               <Grid item xs={12} sm={6} md={4} key={file.id}>
                 <Card>
@@ -235,6 +242,14 @@ function LocalFilesPage() {
                 </Card>
               </Grid>
             ))
+          ) : (
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="body1">
+                  まだファイルがアップロードされていません。
+                </Typography>
+              </Paper>
+            </Grid>
           )}
         </Grid>
       )}

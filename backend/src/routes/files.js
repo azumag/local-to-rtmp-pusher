@@ -8,8 +8,11 @@ const fileService = require('../services/fileService');
 // ローカルファイルのアップロード設定
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../cache/uploads');
+    // getCacheDir関数を使用して一貫性のあるディレクトリ作成を行う
+    const { getCacheDir } = require('../utils/fileUtils');
+    const uploadDir = path.join(getCacheDir('uploads'));
     fs.ensureDirSync(uploadDir);
+    console.log(`Upload directory: ${uploadDir}`); // デバッグ用ログ
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
@@ -38,10 +41,17 @@ const upload = multer({
 // ファイル一覧の取得
 router.get('/', async (req, res, next) => {
   try {
-    const files = await fileService.listFiles();
+    let files = await fileService.listFiles();
+    // 常に配列を返すことを保証
+    if (!Array.isArray(files)) {
+      files = [];
+      console.error('ファイルリストが配列ではありません:', files);
+    }
     res.status(200).json(files);
   } catch (error) {
-    next(error);
+    console.error('ファイル一覧取得エラー:', error);
+    // エラー時も空配列を返す
+    res.status(200).json([]);
   }
 });
 

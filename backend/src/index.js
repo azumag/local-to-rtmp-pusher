@@ -33,8 +33,12 @@ logger.info(`Cache directory set to: ${CACHE_DIR}`);
 
 // ミドルウェアの設定
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+
+// ファイルアップロード用に明示的にファイルサイズ制限を設定
+app.use(express.json({ limit: '1024mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
 
 // APIルートの読み込み
 const fileRoutes = require('./routes/files');
