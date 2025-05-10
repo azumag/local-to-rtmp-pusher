@@ -19,10 +19,12 @@ router.get('/', async (req, res, next) => {
 // ストリーム開始
 router.post('/start', async (req, res, next) => {
   try {
-    logger.info('ストリーム開始APIにリクエストが到達しました'); // 追加するログ
-    logger.info('リクエストボディ:', req.body); // 追加するログ
-
+    logger.info('ストリーム開始APIにリクエストが到達しました');
+    logger.info('リクエストボディ:', req.body);
+    
     const { fileId, rtmpUrl, streamKey, format, videoSettings, audioSettings } = req.body;
+    
+    logger.info(`取得したファイルID: ${fileId}`); // 追加：ファイルIDのログ
     
     if (!fileId) {
       logger.error('ファイルIDが提供されていません');
@@ -74,12 +76,81 @@ router.post('/start', async (req, res, next) => {
     // ファイル情報取得後にデバッグ情報を出力
     logger.info(`ファイル情報: ${JSON.stringify(fileInfo)}`);
     
-    // FFmpegコマンドの構築と実行...（以下略）
+    // FFmpegコマンドの構築と実行
+    try {
+      const streamData = await startStreamingProcess(fileId, inputFile, fileInfo, rtmpUrl, streamKey, format, videoSettings, audioSettings, isGoogleDriveFile);
+      res.status(200).json(streamData);
+    } catch (error) {
+      logger.error(`ストリーム開始失敗: ${error.message}`);
+      res.status(500).json({ error: `ストリーム開始に失敗しました: ${error.message}` });
+    }
   } catch (error) {
     logger.error(`ストリーミングエラー: ${error.message}`);
     next(error);
   }
 });
+
+/**
+ * FFmpegを使用したストリーミングプロセスを開始する関数
+ * @param {string} inputFile 入力ファイルのパス
+ * @param {string} fileId ファイルID
+ * @param {Object} fileInfo ファイル情報のオブジェクト
+ * @param {string} rtmpUrl RTMP/SRT配信先URL
+ * @param {string} [streamKey] ストリームキー（省略可能）
+ * @param {string} [format] 出力フォーマット（省略可能）
+ * @param {Object} [videoSettings] ビデオエンコード設定（省略可能）
+ * @param {Object} [audioSettings] オーディオエンコード設定（省略可能）
+ * @param {boolean} [isGoogleDriveFile] Google Driveファイルかどうかのフラグ
+ * @returns {Promise<Object>} ストリーム情報
+ */
+async function startStreamingProcess(fileId, inputFile, fileInfo, rtmpUrl, streamKey, format, videoSettings, audioSettings, isGoogleDriveFile) {
+  // 出力ストリームURLの構築
+  let streamUrl = rtmpUrl;
+  if (streamKey) {
+    // RTMPの場合、URLとストリームキーを結合
+    streamUrl = `${rtmpUrl}/${streamKey}`;
+  }
+
+  logger.info(`ストリーム出力先URL: ${streamUrl}`);
+
+  // ビデオとオーディオの設定オブジェクト
+  const ffmpegOptions = {
+    fileId,
+    input: inputFile,
+    output: streamUrl,
+    videoSettings: videoSettings || {
+      codec: 'libx264',
+      bitrate: '2500k',
+      fps: 30,
+      preset: 'veryfast'
+    },
+    audioSettings: audioSettings || {
+      codec: 'aac',
+      bitrate: '128k',
+      sampleRate: 44100
+    },
+    format: format || 'flv', // RTMPのデフォルトフォーマット
+    isGoogleDriveFile,
+    rtmpUrl,
+    streamKey,
+  };
+
+  logger.info(`FFmpegオプション: ${JSON.stringify(ffmpegOptions)}`);
+
+  // streamServiceを使用してストリームを開始
+  const stream = await streamService.startStream(ffmpegOptions);
+  
+  logger.info(`ストリーム開始成功: streamId=${stream.id}`);
+  
+  // ストリーム情報を返却
+  return {
+    streamId: stream.id,
+    status: 'streaming',
+    startTime: stream.startTime,
+    inputFile: fileInfo.originalName,
+    outputUrl: streamUrl
+  };
+}
 
 // ストリーム停止
 router.post('/stop/:streamId', async (req, res, next) => {

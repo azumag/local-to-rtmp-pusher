@@ -144,7 +144,17 @@ const getRtmpServerInfo = async () => {
  */
 const startStream = async (streamData) => {
   try {
-    console.log('streamService.startStream 関数が開始されました'); // 追加するログ
+    console.log('streamService.startStream 関数が開始されました'); 
+    
+    // FFmpegのチェックを追加
+    try {
+      const { execSync } = require('child_process');
+      const ffmpegVersion = execSync('ffmpeg -version').toString().split('\n')[0];
+      console.log('FFmpegバージョン情報:', ffmpegVersion);
+    } catch (ffmpegError) {
+      console.error('FFmpeg確認エラー:', ffmpegError.message);
+    }
+    
     console.log('streamData:', streamData); // 追加するログ
 
     const { fileId, rtmpUrl, streamKey, format, videoSettings, audioSettings, isGoogleDriveFile } = streamData;
@@ -197,6 +207,9 @@ const startStream = async (streamData) => {
     const outputUrl = streamKey ? 
       `${rtmpUrl}/${streamKey}` : 
       rtmpUrl;
+
+    // 出力URLのフォーマットをログに出力（デバッグ用）
+    console.log('生成された出力URL:', outputUrl);
     
     // ストリームIDの生成
     const streamId = generateUniqueId();
@@ -256,8 +269,9 @@ const startStream = async (streamData) => {
         console.log('FFmpegコマンド初期化 - 入力ファイル:', inputPath);
         let command = ffmpeg(inputPath);
 
-        console.log('構築されたFFmpegコマンド:', command._arguments); // 追加するログ
-        
+        // 内部プロパティ_argumentsへのアクセスを削除し、初期化完了のログに変更
+        console.log('FFmpegコマンド初期化完了');
+
         // ビデオ設定
         command = command
           .videoCodec(videoSettings.codec)
@@ -277,6 +291,12 @@ const startStream = async (streamData) => {
           command = command.format('mpegts');
         } else {
           command = command.format('flv');
+        }
+        
+        // 出力URLの検証を追加
+        console.log('出力先URL:', outputUrl);
+        if (!outputUrl || !(outputUrl.startsWith('rtmp://') || outputUrl.startsWith('srt://'))) {
+          throw new Error(`無効な出力URL: ${outputUrl}`);
         }
         
         // イベントハンドラ設定
@@ -312,6 +332,12 @@ const startStream = async (streamData) => {
           .on('error', async (err) => {
             console.error(`Stream error: ${streamId}`, err);
             console.error('エラーの詳細:', err.message, JSON.stringify(err));
+            
+            // より詳細なエラー診断情報
+            if (err.message.includes('Invalid output')) {
+              console.error('出力先URLが無効です。形式を確認してください:', outputUrl);
+            }
+            
             logStream.write(`Error: ${err.message}\n`);
             if (err.stack) logStream.write(`Stack: ${err.stack}\n`);
             logStream.end();
