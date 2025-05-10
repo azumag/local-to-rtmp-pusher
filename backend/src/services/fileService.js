@@ -1,138 +1,130 @@
 const fs = require('fs-extra');
 const path = require('path');
-const { getCacheDir, fileExists, getFileType, generateUniqueId } = require('../utils/fileUtils');
+const { v4: uuidv4 } = require('uuid');
+const { getCacheDir } = require('../utils/fileUtils');
 
-// ファイル情報の保存先
-const FILE_DB_PATH = path.join(getCacheDir(), 'files.json');
+// ファイル情報の保存先（JSONファイルを使用）
+const FILES_DB_PATH = path.join(getCacheDir(), 'files.json');
 
 // ファイルDBの初期化
-const initializeFileDb = async () => {
-  if (!await fileExists(FILE_DB_PATH)) {
-    await fs.writeJSON(FILE_DB_PATH, { files: [] });
+const initFilesDb = () => {
+  if (!fs.existsSync(FILES_DB_PATH)) {
+    fs.writeJsonSync(FILES_DB_PATH, []);
   }
-  return await fs.readJSON(FILE_DB_PATH);
 };
 
-/**
- * ファイル一覧の取得
- * @returns {Promise<Array>} ファイル一覧
- */
+// ファイル一覧の取得
+const getFiles = async () => {
+  initFilesDb();
+  try {
+    const files = fs.readJsonSync(FILES_DB_PATH);
+    // 配列であることを確認
+    if (!Array.isArray(files)) {
+      console.error('ファイルデータが配列ではありません。配列に初期化します。');
+      // 配列でない場合は空の配列に初期化して保存
+      fs.writeJsonSync(FILES_DB_PATH, []);
+      return [];
+    }
+    return files;
+  } catch (error) {
+    console.error('ファイルの読み込みエラー:', error);
+    // エラーの場合も空の配列を返す
+    return [];
+  }
+};
+
+// ファイル一覧の取得（getFilesのエイリアス）
 const listFiles = async () => {
-  try {
-    const db = await initializeFileDb();
-    return db.files;
-  } catch (error) {
-    console.error(`Error listing files: ${error.message}`);
-    throw new Error('ファイル一覧の取得に失敗しました');
-  }
+  return getFiles();
 };
 
-/**
- * ファイル情報の保存
- * @param {Object} fileData - ファイル情報
- * @returns {Promise<Object>} 保存されたファイル情報
- */
+// ファイル情報の保存
 const saveFileInfo = async (fileData) => {
+  initFilesDb();
+  let files = await getFiles();
+  
+  // 配列でない場合は空の配列にする
+  if (!Array.isArray(files)) {
+    files = [];
+  }
+  
+  const newFile = {
+    id: uuidv4(),
+    ...fileData,
+    createdAt: new Date().toISOString()
+  };
+  
+  files.push(newFile);
+  
+  // ファイル保存時にエラーハンドリングを追加
   try {
-    const db = await initializeFileDb();
-    
-    const fileId = generateUniqueId();
-    const newFile = {
-      id: fileId,
-      ...fileData,
-      type: getFileType(fileData.path || fileData.originalName),
-      createdAt: new Date().toISOString()
-    };
-    
-    db.files.push(newFile);
-    await fs.writeJSON(FILE_DB_PATH, db);
-    
-    return newFile;
+    fs.writeJsonSync(FILES_DB_PATH, files);
+    console.log(`ファイル情報を保存しました: ${newFile.id}`);
   } catch (error) {
-    console.error(`Error saving file info: ${error.message}`);
+    console.error('ファイル情報の保存に失敗しました:', error);
     throw new Error('ファイル情報の保存に失敗しました');
   }
+  
+  return newFile;
 };
 
-/**
- * ファイル情報の取得
- * @param {string} fileId - ファイルID
- * @returns {Promise<Object|null>} ファイル情報
- */
-const getFileInfo = async (fileId) => {
-  try {
-    const db = await initializeFileDb();
-    const file = db.files.find(f => f.id === fileId);
-    
-    if (!file) {
-      return null;
-    }
-    
-    // ファイルが存在するか確認
-    if (file.path && !await fileExists(file.path)) {
-      file.status = 'missing';
-    } else {
-      file.status = 'available';
-    }
-    
-    return file;
-  } catch (error) {
-    console.error(`Error getting file info: ${error.message}`);
-    throw new Error('ファイル情報の取得に失敗しました');
-  }
+// IDによるファイル情報の取得
+const getFileById = async (fileId) => {
+  const files = await getFiles();
+  return files.find(file => file.id === fileId);
 };
 
-/**
- * ファイルの削除
- * @param {string} fileId - ファイルID
- * @returns {Promise<boolean>} 削除が成功したかどうか
- */
+// ファイルの削除
 const deleteFile = async (fileId) => {
-  try {
-    const db = await initializeFileDb();
-    const fileIndex = db.files.findIndex(f => f.id === fileId);
-    
-    if (fileIndex === -1) {
-      return false;
-    }
-    
-    const file = db.files[fileIndex];
-    
-    // ディスク上のファイルを削除
-    if (file.path && await fileExists(file.path)) {
-      await fs.remove(file.path);
-    }
-    
-    // DBからファイル情報を削除
-    db.files.splice(fileIndex, 1);
-    await fs.writeJSON(FILE_DB_PATH, db);
-    
-    return true;
-  } catch (error) {
-    console.error(`Error deleting file: ${error.message}`);
-    throw new Error('ファイルの削除に失敗しました');
+  const files = await getFiles();
+  const fileToDelete = files.find(file => file.id === fileId);
+  
+  if (!fileToDelete) {
+    throw new Error('ファイルが見つかりません');
   }
+  
+  // ファイルシステムからも削除
+  if (fileToDelete.path && fs.existsSync(fileToDelete.path)) {
+    fs.removeSync(fileToDelete.path);
+  }
+  
+  // DBからファイル情報を削除
+  const updatedFiles = files.filter(file => file.id !== fileId);
+  fs.writeJsonSync(FILES_DB_PATH, updatedFiles);
+  
+  return { success: true };
 };
 
-/**
- * ファイルパスからファイル情報を検索
- * @param {string} filePath - ファイルパス
- * @returns {Promise<Object|null>} ファイル情報
- */
-const findFileByPath = async (filePath) => {
+// ファイルステータスの更新
+const updateFileStatus = async (fileId, status, additionalInfo = {}) => {
+  const files = await getFiles();
+  const fileIndex = files.findIndex(file => file.id === fileId);
+  
+  if (fileIndex === -1) {
+    throw new Error('ファイルが見つかりません');
+  }
+  
+  files[fileIndex] = {
+    ...files[fileIndex],
+    status,
+    ...additionalInfo,
+    updatedAt: new Date().toISOString()
+  };
+  
   try {
-    const db = await initializeFileDb();
-    return db.files.find(f => f.path === filePath) || null;
+    fs.writeJsonSync(FILES_DB_PATH, files);
+    return files[fileIndex];
   } catch (error) {
-    console.error(`Error finding file by path: ${error.message}`);
-    return null;
+    console.error('ファイル状態の更新に失敗しました:', error);
+    throw new Error('ファイル状態の更新に失敗しました');
   }
 };
 
 module.exports = {
+  getFiles,
   listFiles,
   saveFileInfo,
-  getFileInfo,
+  getFileById,
   deleteFile,
-  findFileByPath
+  updateFileStatus // 新しい関数をエクスポート
 };
