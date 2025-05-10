@@ -121,6 +121,8 @@ function LocalFilesPage() {
   const handleStartStream = async () => {
     if (!selectedFile || !rtmpUrl) return;
 
+    console.log('選択されたファイル:', selectedFile); // 追加：選択されたファイルの確認
+
     try {
       const streamData = {
         fileId: selectedFile.id,
@@ -131,7 +133,7 @@ function LocalFilesPage() {
         audioSettings
       };
 
-      console.log('ストリーム開始リクエストデータ:', streamData); // 追加するログ
+      console.log('ストリーム開始リクエストデータ:', streamData);
 
       const response = await startStream(streamData);
       console.log('ストリーミングを開始しました', response.data);
