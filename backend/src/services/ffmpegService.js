@@ -99,6 +99,7 @@ class FFmpegService {
           startTime: new Date()
         });
       } catch (error) {
+        this.activeProcesses.delete(streamId);
         reject(error);
       }
     });

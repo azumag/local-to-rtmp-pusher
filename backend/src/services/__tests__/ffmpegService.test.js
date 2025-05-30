@@ -102,12 +102,12 @@ describe('FFmpegService', () => {
       const input = 'input.mp4';
       const outputUrl = 'rtmp://localhost/live/stream';
       
-      // Simulate error
-      mockCommand.on.mockImplementation((event, callback) => {
-        if (event === 'error') {
-          setTimeout(() => callback(new Error('FFmpeg error')), 0);
-        }
-        return mockCommand;
+      // Clear any existing processes
+      ffmpegService.activeProcesses.clear();
+      
+      // Mock run to throw an error
+      mockCommand.run.mockImplementation(() => {
+        throw new Error('FFmpeg error');
       });
       
       await expect(ffmpegService.startStream(streamId, input, outputUrl))

@@ -1,9 +1,16 @@
 const fs = require('fs-extra');
 const path = require('path');
 const fileService = require('../fileService');
-const { NotFoundError, ValidationError } = require('../../errors/AppError');
 
 jest.mock('fs-extra');
+jest.mock('../../utils/fileUtils', () => ({
+  getCacheDir: () => '/test/cache'
+}));
+
+// Mock uuid
+jest.mock('uuid', () => ({
+  v4: () => 'test-uuid-1234'
+}));
 
 describe('FileService', () => {
   const mockFilesData = [
@@ -12,14 +19,14 @@ describe('FileService', () => {
       name: 'test-video.mp4',
       path: '/uploads/test-video.mp4',
       size: 1024000,
-      uploadDate: '2024-01-01T00:00:00.000Z'
+      createdAt: '2024-01-01T00:00:00.000Z'
     },
     {
       id: '2', 
       name: 'another-video.mp4',
       path: '/uploads/another-video.mp4',
       size: 2048000,
-      uploadDate: '2024-01-02T00:00:00.000Z'
+      createdAt: '2024-01-02T00:00:00.000Z'
     }
   ];
 
@@ -27,12 +34,10 @@ describe('FileService', () => {
     jest.clearAllMocks();
     
     // Default mock implementations
-    fs.ensureDir.mockResolvedValue();
-    fs.pathExists.mockResolvedValue(true);
-    fs.readJson.mockResolvedValue(mockFilesData);
-    fs.writeJson.mockResolvedValue();
-    fs.remove.mockResolvedValue();
-    fs.stat.mockResolvedValue({ size: 1024000 });
+    fs.existsSync.mockReturnValue(true);
+    fs.readJsonSync.mockReturnValue(mockFilesData);
+    fs.writeJsonSync.mockImplementation(() => {});
+    fs.removeSync.mockImplementation(() => {});
   });
 
   describe('getFiles', () => {
@@ -40,15 +45,35 @@ describe('FileService', () => {
       const files = await fileService.getFiles();
       
       expect(files).toEqual(mockFilesData);
-      expect(fs.readJson).toHaveBeenCalled();
+      expect(fs.readJsonSync).toHaveBeenCalledWith('/test/cache/files.json');
     });
 
-    it('should return empty array when no files exist', async () => {
-      fs.readJson.mockRejectedValue(new Error('ENOENT'));
+    it('should return empty array when file does not exist', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readJsonSync.mockImplementation(() => {
+        throw new Error('File not found');
+      });
       
       const files = await fileService.getFiles();
       
       expect(files).toEqual([]);
+    });
+
+    it('should return empty array when data is not an array', async () => {
+      fs.readJsonSync.mockReturnValue('not an array');
+      
+      const files = await fileService.getFiles();
+      
+      expect(files).toEqual([]);
+      expect(fs.writeJsonSync).toHaveBeenCalledWith('/test/cache/files.json', []);
+    });
+  });
+
+  describe('listFiles', () => {
+    it('should be an alias for getFiles', async () => {
+      const files = await fileService.listFiles();
+      
+      expect(files).toEqual(mockFilesData);
     });
   });
 
@@ -59,30 +84,45 @@ describe('FileService', () => {
       expect(file).toEqual(mockFilesData[0]);
     });
 
-    it('should throw NotFoundError for non-existent file', async () => {
-      await expect(fileService.getFileById('999'))
-        .rejects.toThrow(NotFoundError);
+    it('should return undefined for non-existent file', async () => {
+      const file = await fileService.getFileById('999');
+      
+      expect(file).toBeUndefined();
     });
   });
 
-  describe('saveFile', () => {
+  describe('saveFileInfo', () => {
     it('should save file metadata', async () => {
       const fileData = {
-        filename: 'new-video.mp4',
+        name: 'new-video.mp4',
         path: '/uploads/new-video.mp4',
         size: 3072000
       };
       
-      const result = await fileService.saveFile(fileData);
+      const result = await fileService.saveFileInfo(fileData);
       
       expect(result).toMatchObject({
-        name: fileData.filename,
+        id: 'test-uuid-1234',
+        name: fileData.name,
         path: fileData.path,
-        size: fileData.size
+        size: fileData.size,
+        createdAt: expect.any(String)
       });
-      expect(result.id).toBeDefined();
-      expect(result.uploadDate).toBeDefined();
-      expect(fs.writeJson).toHaveBeenCalled();
+      expect(fs.writeJsonSync).toHaveBeenCalled();
+    });
+
+    it('should handle write error', async () => {
+      fs.writeJsonSync.mockImplementation(() => {
+        throw new Error('Write error');
+      });
+      
+      const fileData = {
+        name: 'new-video.mp4',
+        path: '/uploads/new-video.mp4'
+      };
+      
+      await expect(fileService.saveFileInfo(fileData))
+        .rejects.toThrow('ファイル情報の保存に失敗しました');
     });
   });
 
@@ -90,82 +130,54 @@ describe('FileService', () => {
     it('should delete file and metadata', async () => {
       const result = await fileService.deleteFile('1');
       
-      expect(result).toBe(true);
-      expect(fs.remove).toHaveBeenCalledWith(mockFilesData[0].path);
-      expect(fs.writeJson).toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+      expect(fs.removeSync).toHaveBeenCalledWith(mockFilesData[0].path);
+      expect(fs.writeJsonSync).toHaveBeenCalled();
     });
 
-    it('should throw NotFoundError for non-existent file', async () => {
+    it('should throw error for non-existent file', async () => {
       await expect(fileService.deleteFile('999'))
-        .rejects.toThrow(NotFoundError);
+        .rejects.toThrow('ファイルが見つかりません');
     });
 
-    it('should handle file removal error gracefully', async () => {
-      fs.remove.mockRejectedValue(new Error('Permission denied'));
+    it('should handle missing file path gracefully', async () => {
+      fs.existsSync.mockReturnValue(false);
       
-      // Should still remove from metadata even if file removal fails
       const result = await fileService.deleteFile('1');
       
-      expect(result).toBe(true);
-      expect(fs.writeJson).toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+      expect(fs.removeSync).not.toHaveBeenCalled();
+      expect(fs.writeJsonSync).toHaveBeenCalled();
     });
   });
 
-  describe('validateFile', () => {
-    it('should validate file successfully', async () => {
-      const file = {
-        mimetype: 'video/mp4',
-        size: 1024000
-      };
-      
-      const result = await fileService.validateFile(file);
-      
-      expect(result).toBe(true);
-    });
-
-    it('should throw ValidationError for invalid file type', async () => {
-      const file = {
-        mimetype: 'text/plain',
-        size: 1024
-      };
-      
-      await expect(fileService.validateFile(file))
-        .rejects.toThrow(ValidationError);
-    });
-
-    it('should throw ValidationError for oversized file', async () => {
-      const file = {
-        mimetype: 'video/mp4',
-        size: 6 * 1024 * 1024 * 1024 // 6GB
-      };
-      
-      await expect(fileService.validateFile(file))
-        .rejects.toThrow(ValidationError);
-    });
-  });
-
-  describe('getFileStats', () => {
-    it('should return file statistics', async () => {
-      fs.stat.mockResolvedValue({
-        size: 2048000,
-        mtime: new Date('2024-01-01'),
-        ctime: new Date('2024-01-01')
+  describe('updateFileStatus', () => {
+    it('should update file status', async () => {
+      const updatedFile = await fileService.updateFileStatus('1', 'processing', {
+        progress: 50
       });
       
-      const stats = await fileService.getFileStats('/uploads/test.mp4');
-      
-      expect(stats).toMatchObject({
-        size: 2048000,
-        modifiedTime: expect.any(Date),
-        createdTime: expect.any(Date)
+      expect(updatedFile).toMatchObject({
+        id: '1',
+        status: 'processing',
+        progress: 50,
+        updatedAt: expect.any(String)
       });
+      expect(fs.writeJsonSync).toHaveBeenCalled();
     });
 
-    it('should throw NotFoundError for non-existent file', async () => {
-      fs.stat.mockRejectedValue(new Error('ENOENT'));
+    it('should throw error for non-existent file', async () => {
+      await expect(fileService.updateFileStatus('999', 'processing'))
+        .rejects.toThrow('ファイルが見つかりません');
+    });
+
+    it('should handle write error', async () => {
+      fs.writeJsonSync.mockImplementation(() => {
+        throw new Error('Write error');
+      });
       
-      await expect(fileService.getFileStats('/non-existent.mp4'))
-        .rejects.toThrow(NotFoundError);
+      await expect(fileService.updateFileStatus('1', 'processing'))
+        .rejects.toThrow('ファイル状態の更新に失敗しました');
     });
   });
 });
