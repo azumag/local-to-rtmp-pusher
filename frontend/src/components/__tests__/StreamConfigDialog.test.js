@@ -33,12 +33,12 @@ describe('StreamConfigDialog', () => {
     render(<StreamConfigDialog {...defaultProps} />);
     
     expect(screen.getByLabelText('RTMP URL')).toHaveValue('rtmp://localhost:1935/live/stream');
-    expect(screen.getByLabelText('Video Codec')).toBeInTheDocument();
-    expect(screen.getByLabelText('Audio Codec')).toBeInTheDocument();
+    expect(screen.getByText('H.264')).toBeInTheDocument(); // Default video codec
+    expect(screen.getByText('AAC')).toBeInTheDocument(); // Default audio codec
     expect(screen.getByLabelText('Video Bitrate')).toHaveValue('2000k');
     expect(screen.getByLabelText('Audio Bitrate')).toHaveValue('128k');
-    expect(screen.getByLabelText('Resolution')).toBeInTheDocument();
-    expect(screen.getByLabelText('Encoding Preset')).toBeInTheDocument();
+    expect(screen.getByText('Original')).toBeInTheDocument(); // Default resolution
+    expect(screen.getByText('Medium (Balanced)')).toBeInTheDocument(); // Default preset
   });
 
   it('displays error when streamError prop is provided', () => {
@@ -51,14 +51,18 @@ describe('StreamConfigDialog', () => {
   it('disables bitrate fields when copy codec is selected', async () => {
     render(<StreamConfigDialog {...defaultProps} />);
     
-    const videoCodecSelect = screen.getByLabelText('Video Codec');
     const videoBitrateField = screen.getByLabelText('Video Bitrate');
     
     // Initially enabled
     expect(videoBitrateField).not.toBeDisabled();
     
-    // Select copy codec
+    // Find the select element that contains 'H.264' text
+    const videoCodecSelect = screen.getByText('H.264').closest('[role="combobox"]');
+    
+    // Open the select dropdown
     fireEvent.mouseDown(videoCodecSelect);
+    
+    // Select copy codec
     const copyOption = await screen.findByText('Copy (No re-encoding)');
     fireEvent.click(copyOption);
     
