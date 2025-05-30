@@ -31,5 +31,5 @@ module.exports = {
   AppError,
   ValidationError,
   NotFoundError,
-  InternalError
+  InternalError,
 };
