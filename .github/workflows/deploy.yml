@@ -1,115 +1,69 @@
-name: Deploy
+name: Deploy to AWS EC2
 
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - staging
-          - production
+    branches:
+      - main
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  AWS_REGION: ap-northeast-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+  S3_BUCKET_TFSTATE: ${{ secrets.TFSTATE_BUCKET_NAME }} # S3バケット名に合わせて変更
+  DYNAMODB_TABLE_TFLOCK: ${{ secrets.TFLOCK_TABLE_NAME }} # DynamoDBテーブル名に合わせて変更
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Images
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
-    - name: Log in to the Container registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build and push backend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./backend
-        push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.meta.outputs.version }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Build and push frontend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./frontend
-        push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.meta.outputs.version }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Build and push RTMP server image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./rtmp-server
-        push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-rtmp:${{ steps.meta.outputs.version }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
-  deploy-staging:
-    name: Deploy to Staging
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'staging' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-    environment:
-      name: staging
-      url: https://staging.local-to-rtmp-pusher.example.com
-    
-    steps:
-    - name: Deploy to staging server
-      run: |
-        echo "Deploying to staging environment..."
-        # Add your deployment commands here
-        # Example: SSH to server and run docker-compose pull && docker-compose up -d
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-  deploy-production:
-    name: Deploy to Production
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'production'
-    environment:
-      name: production
-      url: https://local-to-rtmp-pusher.example.com
-    
-    steps:
-    - name: Deploy to production server
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push frontend image
+      env:
+        ECR_REPOSITORY: local-to-rtmp-pusher-frontend
       run: |
-        echo "Deploying to production environment..."
-        # Add your deployment commands here
-        # Example: SSH to server and run docker-compose pull && docker-compose up -d
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./frontend
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Build, tag, and push backend image
+      env:
+        ECR_REPOSITORY: local-to-rtmp-pusher-backend
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./backend
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Build, tag, and push rtmp-server image
+      env:
+        ECR_REPOSITORY: local-to-rtmp-pusher-rtmp-server
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./rtmp-server
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.x # 使用するTerraformのバージョンに合わせて変更
+
+    - name: Terraform Init
+      run: terraform init -backend-config="bucket=${{ env.S3_BUCKET_TFSTATE }}" -backend-config="dynamodb_table=${{ env.DYNAMODB_TABLE_TFLOCK }}" -backend-config="region=${{ env.AWS_REGION }}"
+      working-directory: ./terraform
+
+    - name: Terraform Plan
+      run: terraform plan
+      working-directory: ./terraform
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve
+      working-directory: ./terraform
