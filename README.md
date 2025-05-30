@@ -1,21 +1,18 @@
-# ローカル/Googleドライブからのメディアストリーミングシステム設計
+# Local to RTMP Pusher
 
-## システム要件まとめ
+A web-based media streaming system that allows you to stream video files from local storage or Google Drive to RTMP/SRT endpoints using FFmpeg.
 
-- **目的**: ローカルまたはGoogleドライブの動画ファイルをRTMP/SRTでストリーミング配信
-- **技術要件**:
-  - FFmpegを使用したメディア処理
-  - Dockerコンテナベースの実装
-  - docker-composeによる構成管理
-- **機能要件**:
-  - WebベースのUI
-  - 共有Googleドライブフォルダへのアクセス
-  - RTMPまたはSRTプロトコルでのプッシュ
-  - 自前のRTMPサーバーを含む
-  - 簡易なストリーム設定機能
-  - ユーザー認証不要
+## Features
 
-## システムアーキテクチャ
+- 📹 Stream local video files to RTMP/SRT endpoints
+- 🌐 Stream from Google Drive shared folders
+- 🎛️ Configurable video/audio codecs and quality settings
+- 🖥️ Web-based user interface
+- 🐳 Fully containerized with Docker
+- 📊 Real-time stream status monitoring
+- 🚀 Built-in RTMP server for testing
+
+## Architecture
 
 ```mermaid
 graph TD
@@ -25,17 +22,17 @@ graph TD
     
     subgraph "Docker Containers"
         subgraph "Frontend Container"
-            B[Web UI]
+            B[React App]
         end
         
         subgraph "Backend Container"
-            C[API Server]
-            D[Google Drive Client]
-            E[FFmpeg Process Manager]
+            C[Express API Server]
+            D[Google Drive Service]
+            E[FFmpeg Stream Manager]
         end
         
         subgraph "RTMP Server Container"
-            F[RTMP/SRT Server]
+            F[Nginx RTMP Server]
         end
     end
     
@@ -45,186 +42,220 @@ graph TD
     E --> F
     
     D --> G[Google Drive]
-    
-    F --> H[External Viewers]
+    F --> H[External Streaming Platforms]
 ```
 
-## コンポーネント詳細
+## Prerequisites
 
-### 1. フロントエンドコンテナ
-- **技術**: React/Vue.js, Bootstrap/Material-UI
-- **機能**:
-  - Googleドライブ共有URL入力フォーム
-  - ファイルブラウザとセレクター
-  - 簡易ストリーム設定パネル（ビットレート、解像度等）
-  - ストリーム制御インターフェース（開始/停止）
-  - ストリームステータス表示
+- Docker and Docker Compose
+- Node.js 18+ (for development)
+- FFmpeg (included in containers)
 
-### 2. バックエンドコンテナ
-- **技術**: Node.js/Express または Python/FastAPI
-- **機能**:
-  - RESTful API
-  - Googleドライブアクセス処理
-  - FFmpegプロセス管理
-  - ファイル管理（ダウンロード/キャッシュ）
-  - ストリーム設定処理
+## Quick Start
 
-### 3. RTMPサーバーコンテナ
-- **技術**: Nginx-RTMP モジュールまたは SRS (Simple RTMP Server)
-- **機能**:
-  - RTMP/SRTプロトコルサポート
-  - ストリーム配信
-  - 外部クライアントからのpullサポート
-
-## データフロー
-
-```mermaid
-sequenceDiagram
-    participant ユーザー
-    participant UI as Web UI
-    participant API as バックエンド API
-    participant GDrive as Google Drive API
-    participant FFmpeg
-    participant RTMP as RTMPサーバー
-    participant Viewer as 外部視聴者
-    
-    ユーザー->>UI: 1. Googleドライブ共有URLを入力
-    UI->>API: 2. URL送信
-    API->>GDrive: 3. メタデータ取得
-    GDrive-->>API: 4. ファイルリスト
-    API-->>UI: 5. ファイルリスト表示
-    
-    ユーザー->>UI: 6. ファイル選択とストリーム設定
-    UI->>API: 7. ストリーミング開始リクエスト
-    API->>GDrive: 8. ファイルダウンロード
-    GDrive-->>API: 9. ファイルデータ
-    
-    API->>FFmpeg: 10. ストリーミング処理開始
-    FFmpeg->>RTMP: 11. RTMPストリーム出力
-    RTMP-->>API: 12. ストリームステータス
-    API-->>UI: 13. ステータス更新
-    
-    Viewer->>RTMP: 14. ストリーム視聴リクエスト
-    RTMP-->>Viewer: 15. ストリーム配信
+1. Clone the repository:
+```bash
+git clone https://github.com/azumag/local-to-rtmp-pusher.git
+cd local-to-rtmp-pusher
 ```
 
-## Docker構成
-
-```yaml
-version: '3'
-
-services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - app-network
-
-  backend:
-    build: ./backend
-    environment:
-      - NODE_ENV=production
-    volumes:
-      - media-cache:/app/cache
-    depends_on:
-      - rtmp-server
-    networks:
-      - app-network
-
-  rtmp-server:
-    build: ./rtmp-server
-    ports:
-      - "1935:1935"  # RTMP
-      - "8080:8080"  # HTTP (HLS)
-    volumes:
-      - rtmp-data:/var/lib/rtmp
-    networks:
-      - app-network
-
-networks:
-  app-network:
-
-volumes:
-  media-cache:
-  rtmp-data:
+2. Start the application:
+```bash
+docker-compose up -d
 ```
 
-## ディレクトリ構造案
+3. Access the web interface:
+- Frontend: http://localhost:3000
+- RTMP Server: rtmp://localhost:1935/live
+
+## Development Setup
+
+### Using VS Code Dev Container (Recommended)
+
+1. Install the [Remote - Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension
+2. Open the project in VS Code
+3. Click "Reopen in Container" when prompted
+4. The development environment will be automatically configured
+
+### Manual Setup
+
+1. Install dependencies:
+```bash
+# Backend
+cd backend
+npm install
+
+# Frontend
+cd ../frontend
+npm install
+```
+
+2. Start development servers:
+```bash
+# Backend (from backend directory)
+npm run dev
+
+# Frontend (from frontend directory)
+npm start
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the backend directory:
+
+```env
+NODE_ENV=development
+PORT=5000
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+```
+
+### Stream Settings
+
+Default stream settings can be configured in the web interface:
+- Video Codec: libx264, libx265, copy
+- Audio Codec: aac, mp3, copy
+- Video Bitrate: 1000k - 8000k
+- Audio Bitrate: 128k - 320k
+- Resolution: Original, 1920x1080, 1280x720, 854x480
+
+## API Documentation
+
+### Endpoints
+
+#### Files
+- `GET /api/files` - List uploaded files
+- `POST /api/files/upload` - Upload a new file
+- `DELETE /api/files/:id` - Delete a file
+
+#### Google Drive
+- `POST /api/google-drive/list` - List files from a shared folder
+- `POST /api/google-drive/download` - Download a file from Google Drive
+
+#### Streams
+- `GET /api/streams` - List active streams
+- `POST /api/streams/start` - Start a new stream
+- `POST /api/streams/stop/:id` - Stop a stream
+- `GET /api/streams/status/:id` - Get stream status
+
+## Project Structure
 
 ```
 /
-├── frontend/                 # フロントエンドアプリケーション
-│   ├── Dockerfile
-│   ├── public/
+├── backend/                  # Express.js API server
 │   ├── src/
-│   │   ├── components/       # UI コンポーネント
-│   │   ├── services/         # API 接続サービス
-│   │   └── ...
-│   └── package.json
+│   │   ├── routes/          # API endpoints
+│   │   ├── services/        # Business logic
+│   │   └── utils/           # Utility functions
+│   └── Dockerfile
 │
-├── backend/                  # バックエンドAPI
-│   ├── Dockerfile
+├── frontend/                # React application
 │   ├── src/
-│   │   ├── controllers/      # APIエンドポイント
-│   │   ├── services/         # ビジネスロジック
-│   │   ├── utils/            # ユーティリティ関数
-│   │   └── ...
-│   └── package.json
+│   │   ├── pages/          # Page components
+│   │   ├── services/       # API client services
+│   │   └── App.js
+│   └── Dockerfile
 │
-├── rtmp-server/              # RTMPサーバー
-│   ├── Dockerfile
-│   ├── config/               # サーバー設定
-│   └── ...
+├── rtmp-server/            # Nginx RTMP server
+│   ├── config/
+│   └── Dockerfile
 │
-└── docker-compose.yml        # Docker Compose 設定
+├── .devcontainer/          # VS Code Dev Container config
+└── docker-compose.yml      # Docker Compose configuration
 ```
 
-## 技術選定
+## Testing
 
-1. **フロントエンド**:
-   - React.js (または Vue.js)
-   - Axios (HTTP クライアント)
-   - React Bootstrap (UI フレームワーク)
+### Running Tests
 
-2. **バックエンド**:
-   - Node.js + Express.js
-   - googleapis (Google Drive API クライアント)
-   - fluent-ffmpeg (FFmpeg Node.js ラッパー)
+```bash
+# Backend tests
+cd backend
+npm test
 
-3. **RTMPサーバー**:
-   - nginx-rtmp-module (nginx + RTMP モジュール)
-   - または SRS (Simple RTMP Server)
+# Frontend tests
+cd frontend
+npm test
+```
 
-4. **コンテナ化**:
-   - Docker
-   - docker-compose
+### Test Coverage
 
-## 実装計画
+```bash
+# Generate coverage report
+npm run test:coverage
+```
 
-1. **フェーズ1**: 基本設定
-   - プロジェクト構造の設定
-   - Docker環境の構築
-   - RTMPサーバーの設定と検証
+## CI/CD
 
-2. **フェーズ2**: バックエンド開発
-   - FFmpeg統合
-   - ファイル管理システム
-   - APIエンドポイント実装
+This project uses GitHub Actions for continuous integration and deployment:
 
-3. **フェーズ3**: Googleドライブ統合
-   - Google Drive APIクライアント実装
-   - ファイルメタデータ取得
-   - ファイルダウンロード処理
+- **Test Pipeline**: Runs on every push and pull request
+- **Build Pipeline**: Builds Docker images on main branch
+- **Deploy Pipeline**: Deploys to production on release tags
 
-4. **フェーズ4**: フロントエンド開発
-   - UI設計と実装
-   - APIとの連携
-   - ストリーム制御インターフェース
+## Contributing
 
-5. **フェーズ5**: 統合とテスト
-   - コンポーネント間の統合
-   - エンドツーエンドテスト
-   - パフォーマンス最適化
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Code Style
+
+- Follow ESLint configuration
+- Use Prettier for code formatting
+- Write meaningful commit messages
+- Add tests for new features
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Port already in use**
+   ```bash
+   # Change ports in docker-compose.yml or stop conflicting services
+   docker-compose down
+   docker-compose up -d
+   ```
+
+2. **FFmpeg not found**
+   ```bash
+   # Rebuild containers
+   docker-compose build --no-cache
+   ```
+
+3. **Google Drive authentication fails**
+   - Ensure correct OAuth credentials in `.env`
+   - Check if the shared folder URL is valid
+
+### Logs
+
+View container logs:
+```bash
+# All containers
+docker-compose logs -f
+
+# Specific container
+docker-compose logs -f backend
+```
+
+## Security Considerations
+
+- No authentication is required by design
+- Ensure proper network isolation in production
+- Validate all input data
+- Use environment variables for sensitive configuration
+- Regular security updates for dependencies
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [FFmpeg](https://ffmpeg.org/) for media processing
+- [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) for RTMP server
+- [React](https://reactjs.org/) and [Express.js](https://expressjs.com/) for web framework

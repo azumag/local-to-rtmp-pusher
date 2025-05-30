@@ -1,0 +1,186 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**', 'fix/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install FFmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: npm ci
+    
+    - name: Run tests
+      working-directory: ./backend
+      run: npm test
+    
+    - name: Generate coverage report
+      working-directory: ./backend
+      run: npm run test:coverage
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./backend/coverage
+        flags: backend
+        name: backend-coverage
+
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Run tests
+      working-directory: ./frontend
+      run: npm test -- --coverage --watchAll=false
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./frontend/coverage
+        flags: frontend
+        name: frontend-coverage
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+    
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: npm ci
+    
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Lint backend
+      working-directory: ./backend
+      run: npm run lint || true
+    
+    - name: Lint frontend
+      working-directory: ./frontend
+      run: npm run lint || true
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        push: false
+        tags: local-to-rtmp-pusher-backend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: false
+        tags: local-to-rtmp-pusher-frontend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build RTMP server Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./rtmp-server
+        push: false
+        tags: local-to-rtmp-pusher-rtmp:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Test Docker Compose
+      run: |
+        docker-compose config
+        docker-compose build
+        docker-compose up -d
+        sleep 10
+        docker-compose ps
+        curl -f http://localhost:3000 || exit 1
+        docker-compose down
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: './backend'
+        format: 'sarif'
+        output: 'trivy-backend.sarif'
+    
+    - name: Run Trivy vulnerability scanner on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: './frontend'
+        format: 'sarif'
+        output: 'trivy-frontend.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: '.'
