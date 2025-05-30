@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   frontend:
     build: ./frontend
@@ -13,6 +11,8 @@ services:
 
   backend:
     build: ./backend
+    ports:
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - RTMP_SERVER=rtmp://rtmp-server:1935/live
