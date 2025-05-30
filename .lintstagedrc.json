@@ -1,0 +1,8 @@
+{
+  "backend/**/*.js": ["cd backend && npm run lint:fix", "cd backend && npm run format"],
+  "frontend/**/*.{js,jsx}": [
+    "cd frontend && npx eslint --fix",
+    "cd frontend && npx prettier --write"
+  ],
+  "*.{json,md,yml,yaml}": ["prettier --write"]
+}
