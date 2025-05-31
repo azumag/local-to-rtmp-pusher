@@ -2,12 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button, Paper, Grid, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, LinearProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { styled } from '@mui/material/styles';
-import axios from 'axios';
 
 // APIサービスのインポート
 import { uploadFile, listFiles, deleteFile } from '../services/fileService';
 import { startStream } from '../services/streamService';
 import FileCard from '../components/FileCard';
+
+// localStorage keys
+const STORAGE_KEYS = {
+  RTMP_URL: 'streamcaster_rtmp_url',
+  STREAM_KEY: 'streamcaster_stream_key',
+  STREAM_FORMAT: 'streamcaster_stream_format',
+  VIDEO_SETTINGS: 'streamcaster_video_settings',
+  AUDIO_SETTINGS: 'streamcaster_audio_settings'
+};
+
+// localStorage helper functions
+const loadFromStorage = (key, defaultValue) => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : defaultValue;
+  } catch (error) {
+    console.warn(`Failed to load ${key} from localStorage:`, error);
+    return defaultValue;
+  }
+};
+
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn(`Failed to save ${key} to localStorage:`, error);
+  }
+};
 
 // ファイルアップロード用のスタイル付きコンポーネント
 const VisuallyHiddenInput = styled('input')({
@@ -62,8 +89,31 @@ function LocalFilesPage() {
     }
   };
 
-  // 初回ロード時にファイル一覧を取得
+  // Load saved values from localStorage on component mount
   useEffect(() => {
+    const savedRtmpUrl = loadFromStorage(STORAGE_KEYS.RTMP_URL, '');
+    const savedStreamKey = loadFromStorage(STORAGE_KEYS.STREAM_KEY, '');
+    const savedStreamFormat = loadFromStorage(STORAGE_KEYS.STREAM_FORMAT, 'rtmp');
+    const savedVideoSettings = loadFromStorage(STORAGE_KEYS.VIDEO_SETTINGS, {
+      codec: 'libx264',
+      bitrate: '2500k',
+      framerate: 30,
+      width: 1280,
+      height: 720
+    });
+    const savedAudioSettings = loadFromStorage(STORAGE_KEYS.AUDIO_SETTINGS, {
+      codec: 'aac',
+      bitrate: '128k',
+      sampleRate: 44100,
+      channels: 2
+    });
+
+    setRtmpUrl(savedRtmpUrl);
+    setStreamKey(savedStreamKey);
+    setStreamFormat(savedStreamFormat);
+    setVideoSettings(savedVideoSettings);
+    setAudioSettings(savedAudioSettings);
+
     fetchFiles();
   }, []);
 
@@ -137,6 +187,13 @@ function LocalFilesPage() {
       const response = await startStream(streamData);
       console.log('ストリーミングを開始しました', response.data);
       
+      // 成功した場合に設定を保存
+      saveToStorage(STORAGE_KEYS.RTMP_URL, rtmpUrl);
+      saveToStorage(STORAGE_KEYS.STREAM_KEY, streamKey);
+      saveToStorage(STORAGE_KEYS.STREAM_FORMAT, streamFormat);
+      saveToStorage(STORAGE_KEYS.VIDEO_SETTINGS, videoSettings);
+      saveToStorage(STORAGE_KEYS.AUDIO_SETTINGS, audioSettings);
+      
       // ダイアログを閉じる
       setStreamDialogOpen(false);
       
@@ -145,6 +202,35 @@ function LocalFilesPage() {
     } catch (error) {
       console.error('ストリーミングの開始に失敗しました', error);
       alert(`エラー: ${error.response?.data?.error || error.message || 'ストリーミングの開始に失敗しました'}`);
+    }
+  };
+
+  // クイックストリーミング（デフォルト設定で即座に開始）
+  const handleQuickStream = async (file) => {
+    // デフォルト設定が不十分な場合は通常ダイアログを開く
+    if (!rtmpUrl) {
+      handleOpenStreamDialog(file);
+      return;
+    }
+
+    try {
+      const streamData = {
+        fileId: file.id,
+        rtmpUrl,
+        streamKey,
+        format: streamFormat,
+        videoSettings,
+        audioSettings
+      };
+
+      const response = await startStream(streamData);
+      console.log('クイックストリーミングを開始しました', response.data);
+      
+      // ユーザーに通知
+      alert(`クイックストリーミングを開始しました: ${file.originalName}`);
+    } catch (error) {
+      console.error('クイックストリーミングの開始に失敗しました', error);
+      alert(`エラー: ${error.response?.data?.error || error.message || 'クイックストリーミングの開始に失敗しました'}`);
     }
   };
 
@@ -213,9 +299,11 @@ function LocalFilesPage() {
                     uploadDate: file.createdAt
                   }}
                   onStream={() => handleOpenStreamDialog(file)}
+                  onQuickStream={() => handleQuickStream(file)}
                   onDelete={() => handleDeleteFile(file.id)}
                   cardType="local"
                   showDelete={true}
+                  showQuickStream={!!rtmpUrl}
                 />
               </Grid>
             ))

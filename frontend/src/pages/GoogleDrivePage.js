@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, Button, Grid, Card, CardContent, CardMedia, CardActions, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, LinearProgress, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Grid, Card, CardContent, CardMedia, CardActions, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, LinearProgress, CircularProgress, Snackbar, Alert } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
 import DownloadIcon from '@mui/icons-material/Download';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
 import { listFilesFromShareUrl, downloadFile, streamFile } from '../services/googleDriveService';
 
 // localStorage keys
@@ -36,6 +37,7 @@ const saveToStorage = (key, value) => {
 
 function GoogleDrivePage() {
   const [shareUrl, setShareUrl] = useState('');
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [streamDialogOpen, setStreamDialogOpen] = useState(false);
@@ -97,12 +99,30 @@ function GoogleDrivePage() {
     setLoading(true);
     try {
       const response = await listFilesFromShareUrl(shareUrl);
-      setFiles(response.data);
+      console.log('API response:', response);
+      
+      // レスポンスデータの確認
+      const filesData = response.data || response;
+      console.log('Files data:', filesData);
+      
+      if (Array.isArray(filesData)) {
+        setFiles(filesData);
+      } else {
+        console.error('Unexpected response format:', filesData);
+        setFiles([]);
+      }
+      
       // 成功した場合にURLを保存
       saveToStorage(STORAGE_KEYS.GOOGLE_DRIVE_URL, shareUrl);
     } catch (error) {
       console.error('ファイル一覧の取得に失敗しました', error);
-      alert(`エラー: ${error.response?.data?.error || error.message || 'ファイル一覧の取得に失敗しました'}`);
+      const errorMessage = error.response?.data?.error || error.message || 'ファイル一覧の取得に失敗しました';
+      console.error('Error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      alert(`エラー: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -131,6 +151,15 @@ function GoogleDrivePage() {
     setStreamDialogOpen(true);
   };
 
+  // 通知表示用の関数
+  const showNotification = (message, severity = 'info') => {
+    setNotification({ open: true, message, severity });
+  };
+
+  const hideNotification = () => {
+    setNotification({ ...notification, open: false });
+  };
+
   // ストリーミングの開始
   const handleStartStream = async () => {
     if (!selectedFile || !rtmpUrl) return;
@@ -146,7 +175,7 @@ function GoogleDrivePage() {
       };
 
       const response = await streamFile(streamData);
-      console.log('ストリーミングを開始しました', response.data);
+      console.log('ストリーミングリクエストが送信されました', response.data);
       
       // 成功した場合にRTMP設定を保存
       saveToStorage(STORAGE_KEYS.RTMP_URL, rtmpUrl);
@@ -158,11 +187,48 @@ function GoogleDrivePage() {
       // ダイアログを閉じる
       setStreamDialogOpen(false);
       
-      // ユーザーに通知
-      alert(`ストリーミングを開始しました: ${selectedFile.name}`);
+      // ユーザーに通知（ダウンロード状況に応じてメッセージを調整）
+      if (response.data.status === 'preparing') {
+        showNotification(`ストリーミング準備中: ${selectedFile.name}. ${response.data.message || 'ダウンロード完了後にストリーミングを開始します'}`, 'warning');
+      } else {
+        showNotification(`ストリーミングを開始しました: ${selectedFile.name}`, 'success');
+      }
     } catch (error) {
       console.error('ストリーミングの開始に失敗しました', error);
       alert(`エラー: ${error.response?.data?.error || error.message || 'ストリーミングの開始に失敗しました'}`);
+    }
+  };
+
+  // クイックストリーミング（デフォルト設定で即座に開始）
+  const handleQuickStream = async (file) => {
+    // デフォルト設定が不十分な場合は通常ダイアログを開く
+    if (!rtmpUrl) {
+      handleOpenStreamDialog(file);
+      return;
+    }
+
+    try {
+      const streamData = {
+        fileId: file.id,
+        rtmpUrl,
+        streamKey,
+        format: streamFormat,
+        videoSettings,
+        audioSettings
+      };
+
+      const response = await streamFile(streamData);
+      console.log('クイックストリーミングリクエストが送信されました', response.data);
+      
+      // ユーザーに通知（ダウンロード状況に応じてメッセージを調整）
+      if (response.data.status === 'preparing') {
+        showNotification(`ストリーミング準備中: ${file.name}. ${response.data.message || 'ダウンロード完了後にストリーミングを開始します'}`, 'warning');
+      } else {
+        showNotification(`クイックストリーミングを開始しました: ${file.name}`, 'success');
+      }
+    } catch (error) {
+      console.error('クイックストリーミングの開始に失敗しました', error);
+      alert(`エラー: ${error.response?.data?.error || error.message || 'クイックストリーミングの開始に失敗しました'}`);
     }
   };
 
@@ -233,14 +299,29 @@ function GoogleDrivePage() {
                       {file.name}
                     </Typography>
                   </CardContent>
-                  <CardActions>
-                    <Button
-                      size="small"
-                      startIcon={<PlayArrowIcon />}
-                      onClick={() => handleOpenStreamDialog(file)}
-                    >
-                      ストリーム
-                    </Button>
+                  <CardActions sx={{ justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<PlayArrowIcon />}
+                        onClick={() => handleOpenStreamDialog(file)}
+                      >
+                        ストリーム
+                      </Button>
+                      {rtmpUrl && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="secondary"
+                          startIcon={<FlashOnIcon />}
+                          onClick={() => handleQuickStream(file)}
+                          sx={{ minWidth: 'auto' }}
+                        >
+                          クイック
+                        </Button>
+                      )}
+                    </Box>
                     <IconButton
                       color="primary"
                       size="small"
@@ -430,6 +511,18 @@ function GoogleDrivePage() {
           <Button onClick={handleStartStream} variant="contained">ストリーミング開始</Button>
         </DialogActions>
       </Dialog>
+
+      {/* 通知用のSnackbar */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={hideNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={hideNotification} severity={notification.severity} sx={{ width: '100%' }}>
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
