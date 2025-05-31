@@ -2,10 +2,8 @@ import axios from 'axios';
 
 // 環境ごとのAPIベースURL
 const getBaseUrl = () => {
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:3000/api';
-  }
-  return '/api'; // 本番環境ではプロキシを使用
+  // 環境変数から読み取り、デフォルト値を設定
+  return process.env.REACT_APP_API_URL || '/api';
 };
 
 // axiosのインスタンスを作成

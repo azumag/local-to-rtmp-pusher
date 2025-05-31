@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  streamcaster-frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: streamcaster-frontend-dev
+    ports:
+      - '8080:3000'
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true # Enable polling for file changes in Docker
+      - WATCHPACK_POLLING=true # Alternative for webpack 5
+      - WDS_SOCKET_HOST=localhost # WebSocket host for hot reload
+      - WDS_SOCKET_PORT=8080 # WebSocket port
+      - PORT=3000 # React dev server port inside container
+    volumes:
+      - ./frontend/src:/app/src # Mount source code
+      - ./frontend/public:/app/public # Mount public assets
+      - ./frontend/.env.development:/app/.env # Mount development environment file
+      - /app/node_modules # Use container's node_modules
+    depends_on:
+      - streamcaster-backend
+    networks:
+      - streamcaster-network
+    stdin_open: true # Keep STDIN open (required for React dev server)
+    tty: true # Allocate a pseudo-TTY
+
+  streamcaster-backend:
+    build: ./backend
+    container_name: streamcaster-backend
+    ports:
+      - '3001:3000'
+    environment:
+      - NODE_ENV=development
+      - RTMP_SERVER=rtmp://streamcaster-rtmp:1935/live
+    volumes:
+      - streamcaster-cache:/app/cache
+      - ./backend/src:/app/src # Mount backend source for development if needed
+    depends_on:
+      streamcaster-rtmp:
+        condition: service_healthy
+    networks:
+      - streamcaster-network
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  streamcaster-rtmp:
+    image: tiangolo/nginx-rtmp
+    container_name: streamcaster-rtmp
+    volumes:
+      - ./rtmp-server/config/nginx.conf:/etc/nginx/nginx.conf
+      - streamcaster-data:/opt/rtmp/data
+    ports:
+      - '1935:1935' # RTMP
+      - '8000:8000' # HTTP
+    networks:
+      - streamcaster-network
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:8000/stat']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  streamcaster-network:
+
+volumes:
+  streamcaster-cache:
+  streamcaster-data:
