@@ -25,6 +25,7 @@ services:
     environment:
       - NODE_ENV=production
       - RTMP_SERVER=rtmp://streamcaster-rtmp:1935/live
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     volumes:
       - streamcaster-cache:/app/cache
     depends_on:

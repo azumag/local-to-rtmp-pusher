@@ -43,7 +43,8 @@ const upload = multer({
 // ファイル一覧の取得
 router.get('/', async (req, res, next) => {
   try {
-    let files = await fileService.listFiles();
+    // ローカルファイルのみを取得（Google Driveファイルは除外）
+    let files = await fileService.listLocalFiles();
     // 常に配列を返すことを保証
     if (!Array.isArray(files)) {
       files = [];
@@ -70,6 +71,7 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       path: req.file.path,
       size: req.file.size,
       mimetype: req.file.mimetype,
+      source: 'local', // ローカルアップロードファイルであることを明示
       uploadedAt: new Date(),
     };
 

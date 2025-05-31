@@ -301,6 +301,7 @@ const downloadFileAsync = async (fileId, localPath, downloadInfo) => {
       size: finalFileSize,
       source: 'google_drive',
       sourceId: fileId,
+      googleDriveId: fileId, // Google Drive IDも保存
     });
 
     // アクティブなダウンロードから削除
@@ -332,26 +333,33 @@ const downloadFileAsync = async (fileId, localPath, downloadInfo) => {
  */
 const extractFolderId = async (shareUrl) => {
   try {
+    console.log(`Extracting folder ID from URL: ${shareUrl}`);
+
     // URLからフォルダIDを抽出するための正規表現パターン
     const patterns = [
-      /\/folders\/([a-zA-Z0-9_-]+)(?:\?|$)/, // フォルダURLから（より柔軟）
-      /\/drive\/folders\/([a-zA-Z0-9_-]+)(?:\?|$)/, // 共有URLから（より柔軟）
-      /id=([a-zA-Z0-9_-]+)/, // id=パラメータから
-      /\/folders\/([a-zA-Z0-9_-]{33})/, // 従来の33文字ID
-      /([a-zA-Z0-9_-]{33,})/, // 33文字以上のID
+      /\/folders\/([a-zA-Z0-9_-]+?)(?:\?|$)/, // 通常のフォルダーURL
+      /\/drive\/folders\/([a-zA-Z0-9_-]+?)(?:\?|$)/, // drive URL形式
+      /\/open\?id=([a-zA-Z0-9_-]+?)(?:&|$)/, // open形式
+      /id=([a-zA-Z0-9_-]+?)(?:&|$)/, // id=パラメータから
+      /\/d\/([a-zA-Z0-9_-]+?)\//, // ファイル形式のURL
     ];
 
-    for (const pattern of patterns) {
+    for (let i = 0; i < patterns.length; i += 1) {
+      const pattern = patterns[i];
       const match = shareUrl.match(pattern);
-      if (match && match[1]) {
-        return match[1];
+      console.log(`Pattern ${i + 1}: ${pattern}, Match: ${match ? match[1] : 'No match'}`);
+
+      if (match && match[1] && match[1].length >= 15) {
+        const folderId = match[1];
+        console.log(`Successfully extracted folder ID: ${folderId}`);
+        return folderId;
       }
     }
 
-    throw new Error('Google DriveのフォルダIDを抽出できませんでした');
+    throw new Error(`Google DriveのフォルダIDを抽出できませんでした。URL: ${shareUrl}`);
   } catch (error) {
     console.error(`Error extracting folder ID: ${error.message}`);
-    throw new Error('共有URLからフォルダIDの抽出に失敗しました');
+    throw new Error(`共有URLからフォルダIDの抽出に失敗しました: ${error.message}`);
   }
 };
 
@@ -403,16 +411,45 @@ const getFileInfo = async (fileId) => {
  * @returns {Promise<Array>} ファイル一覧
  */
 const listFilesFromShareUrl = async (shareUrl) => {
+  console.log(`[listFilesFromShareUrl] Starting with URL: ${shareUrl}`);
+
   try {
-    console.log(`Attempting to extract folder ID from URL: ${shareUrl}`);
+    // まずGoogle Drive APIを試す
+    try {
+      console.log('[listFilesFromShareUrl] Attempting Google Drive API...');
+      const googleDriveApiService = require('./googleDriveApiService');
+      const files = await googleDriveApiService.listFilesFromShareUrl(shareUrl);
+      if (files && files.length > 0) {
+        console.log(
+          `[listFilesFromShareUrl] Google Drive API returned ${files.length} files. Returning API results.`
+        );
+        return files;
+      }
+      console.log(
+        '[listFilesFromShareUrl] Google Drive API returned no files or failed, falling back to HTML parsing...'
+      );
+    } catch (apiError) {
+      console.log(
+        `[listFilesFromShareUrl] Google Drive API failed (${apiError.message}), falling back to HTML parsing.`
+      );
+      // エラーの詳細をログに出力
+      console.error(
+        `[listFilesFromShareUrl] Google Drive API Error Details: ${JSON.stringify(apiError)}`
+      );
+      console.error(`[listFilesFromShareUrl] Google Drive API Error Stack: ${apiError.stack}`);
+    }
+
+    // APIが失敗した場合はHTML解析にフォールバック
+    console.log('[listFilesFromShareUrl] Extracting folder ID from share URL...');
     const folderId = await extractFolderId(shareUrl);
-    console.log(`Extracted folder ID: ${folderId}`);
+    console.log(`[listFilesFromShareUrl] Folder ID extracted: ${folderId}`);
 
     // フォルダーがアクセス可能かテスト
     const testUrl = `https://drive.google.com/drive/folders/${folderId}`;
-    console.log(`Testing folder access: ${testUrl}`);
+    console.log(`[listFilesFromShareUrl] Testing folder access with URL: ${testUrl}`);
 
     const response = await fetch(testUrl);
+    console.log(`[listFilesFromShareUrl] Fetch response status: ${response.status}`);
 
     if (!response.ok) {
       throw new Error(
@@ -421,6 +458,18 @@ const listFilesFromShareUrl = async (shareUrl) => {
     }
 
     const html = await response.text();
+    console.log(`[listFilesFromShareUrl] HTML response length: ${html.length} characters`);
+
+    // HTMLの一部をログに出力してデバッグ
+    console.log('[listFilesFromShareUrl] === HTML Sample (first 1000 chars) ===');
+    console.log(html.substring(0, 1000));
+    console.log('[listFilesFromShareUrl] === HTML Sample (searching for file patterns) ===');
+    // ファイルIDらしきパターンを探す
+    const possibleFileIds = html.match(/[a-zA-Z0-9_-]{20,}/g);
+    if (possibleFileIds) {
+      console.log(`[listFilesFromShareUrl] Found ${possibleFileIds.length} possible file IDs:`);
+      possibleFileIds.slice(0, 5).forEach((id) => console.log(`  ${id}`));
+    }
 
     // HTMLが適切に取得できているかチェック
     if (html.includes('You need permission') || html.includes('Request access')) {
@@ -429,48 +478,96 @@ const listFilesFromShareUrl = async (shareUrl) => {
       );
     }
 
-    // ファイル情報を抽出するための複数の正規表現パターン
-    const filePatterns = [
-      /"([\w-]{33,})",\["(.*?)","(.*?)","(.*?)"/g,
-      /\["([\w-]{33,})","([^"]*?)","([^"]*?)"/g,
-      /"id":"([\w-]{33,})"[^}]*"name":"([^"]*?)"[^}]*"mimeType":"([^"]*?)"/g,
-    ];
+    // Google DriveのHTMLから__initDataを探す
+    console.log('[listFilesFromShareUrl] Searching for __initData in HTML...');
+    const initDataMatch = html.match(/__initData\s*=\s*(\[[\s\S]*?\]);/);
 
     const files = [];
 
-    for (const filePattern of filePatterns) {
-      let match = filePattern.exec(html);
-      while (match !== null) {
-        const [, id, name, mimeType] = match;
+    if (initDataMatch) {
+      console.log('[listFilesFromShareUrl] Found __initData, parsing...');
+      try {
+        // evalは危険だが、Google Driveの構造化データを解析するため使用
+        // eslint-disable-next-line no-eval
+        const initData = eval(initDataMatch[1]);
+        console.log('[listFilesFromShareUrl] Successfully parsed __initData');
 
-        // 動画ファイルのみフィルタリング
-        if (mimeType && mimeType.startsWith('video/')) {
-          files.push({
-            id,
-            name,
-            mimeType,
-            downloadUrl: `https://drive.google.com/uc?export=download&id=${id}`,
-          });
-        }
-        match = filePattern.exec(html);
+        // 配列を再帰的に探索してファイル情報を抽出
+        const findFiles = (obj) => {
+          if (Array.isArray(obj)) {
+            for (const item of obj) {
+              findFiles(item);
+            }
+          } else if (obj && typeof obj === 'object') {
+            // ファイルIDとファイル名、MIMEタイプらしきものを探す
+            if (obj.id && obj.name && obj.mimeType) {
+              if (obj.mimeType.startsWith('video/')) {
+                console.log(`[listFilesFromShareUrl] Found video file: ${obj.name} (${obj.id})`);
+                files.push({
+                  id: obj.id,
+                  name: obj.name,
+                  mimeType: obj.mimeType,
+                  downloadUrl: `https://drive.google.com/uc?export=download&id=${obj.id}`,
+                });
+              }
+            }
+            // ネストされたオブジェクトも探索
+            for (const key in obj) {
+              if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                findFiles(obj[key]);
+              }
+            }
+          }
+        };
+        findFiles(initData);
+        console.log(`[listFilesFromShareUrl] Total files found via HTML parsing: ${files.length}`);
+      } catch (parseError) {
+        console.error(`[listFilesFromShareUrl] Error parsing __initData: ${parseError.message}`);
+        console.error(`[listFilesFromShareUrl] Parse Error Stack: ${parseError.stack}`);
       }
+    } else {
+      console.log(
+        '[listFilesFromShareUrl] __initData not found in HTML. Attempting alternative parsing methods.'
+      );
+      // __initDataが見つからない場合の代替解析方法
+      // 例: 正規表現でファイル情報を直接抽出
+      const filePatterns = [
+        /<div[^>]*data-id="([^"]+)"[^>]*data-name="([^"]+)"[^>]*data-mime-type="([^"]+)"/g,
+        // 他の可能性のあるパターンを追加
+      ];
 
-      // ファイルが見つかった場合は他のパターンを試さない
-      if (files.length > 0) break;
+      for (const pattern of filePatterns) {
+        let match = pattern.exec(html);
+        while (match !== null) {
+          const [, id, name, mimeType] = match;
+          if (mimeType.startsWith('video/')) {
+            console.log(`[listFilesFromShareUrl] Found video file via regex: ${name} (${id})`);
+            files.push({
+              id,
+              name,
+              mimeType,
+              downloadUrl: `https://drive.google.com/uc?export=download&id=${id}`,
+            });
+          }
+          match = pattern.exec(html);
+        }
+      }
+      console.log(
+        `[listFilesFromShareUrl] Total files found via alternative parsing: ${files.length}`
+      );
     }
-
-    console.log(`Found ${files.length} video files in the folder`);
 
     if (files.length === 0) {
       throw new Error(
-        '指定されたフォルダに動画ファイルが見つかりません。フォルダが空であるか、動画ファイルが含まれていない可能性があります。'
+        'Google Driveから動画ファイルが見つかりませんでした。共有設定とフォルダの内容を確認してください。'
       );
     }
 
     return files;
   } catch (error) {
-    console.error(`Error listing files from share URL: ${error.message}`);
-    throw new Error(`Google Driveの共有URLからファイル一覧の取得に失敗しました: ${error.message}`);
+    console.error(`[listFilesFromShareUrl] Error in listFilesFromShareUrl: ${error.message}`);
+    console.error(`[listFilesFromShareUrl] Error Stack: ${error.stack}`);
+    throw error;
   }
 };
 
@@ -646,10 +743,10 @@ const streamFile = async (streamData) => {
 };
 
 module.exports = {
+  listFilesFromShareUrl,
   extractFolderId,
   getFileInfo,
-  listFilesFromShareUrl,
   downloadFile,
-  getDownloadStatus,
   streamFile,
+  getDownloadStatus,
 };

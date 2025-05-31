@@ -30,6 +30,13 @@ logger.info(`Cache directory set to: ${CACHE_DIR}`);
 
 // ミドルウェアの設定
 app.use(cors());
+
+// リクエストログミドルウェア
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path} - ${req.ip}`);
+  next();
+});
+
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
