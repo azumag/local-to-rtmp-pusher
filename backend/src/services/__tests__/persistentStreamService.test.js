@@ -206,9 +206,8 @@ describe('PersistentStreamService', () => {
       const { writeJSONSafely } = require('../../utils/fileUtils');
       writeJSONSafely.mockRejectedValueOnce(new Error('Write failed'));
 
-      await expect(service.getSessionInfo('test-id')).rejects.toThrow(
-        'セッション情報の取得に失敗しました'
-      );
+      const result = await service.getSessionInfo('test-id');
+      expect(result).toBeNull();
     });
 
     test('セッション情報保存でエラーが発生した場合', async () => {

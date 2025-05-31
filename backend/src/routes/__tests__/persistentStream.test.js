@@ -1,9 +1,20 @@
 // モック設定
-jest.mock('fs-extra');
+jest.mock('fs-extra', () => ({
+  pathExists: jest.fn(() => Promise.resolve(false)),
+  ensureDir: jest.fn(() => Promise.resolve()),
+  writeJSON: jest.fn(() => Promise.resolve()),
+  readJSON: jest.fn(() => Promise.resolve({ endpoints: [] })),
+}));
 jest.mock('../../utils/fileUtils', () => ({
   getCacheDir: jest.fn(() => '/tmp/test-cache'),
   fileExists: jest.fn(() => Promise.resolve(true)),
   generateUniqueId: jest.fn(() => 'test-unique-id'),
+}));
+jest.mock('../../utils/logger', () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn(),
 }));
 
 const request = require('supertest');
@@ -19,44 +30,41 @@ const SESSION_STATES = {
   ERROR: 'error',
 };
 
+// モックサービスインスタンス
+const mockService = {
+  startSession: jest.fn(),
+  stopSession: jest.fn(),
+  getSessionStatus: jest.fn(),
+  getActiveSessions: jest.fn(),
+  switchToFile: jest.fn(),
+  switchToStandby: jest.fn(),
+  uploadStandbyImage: jest.fn(),
+};
+
 // PersistentStreamServiceをモック
 jest.mock('../../services/persistentStreamService', () => ({
-  PersistentStreamService: jest.fn(),
+  PersistentStreamService: jest.fn(() => mockService),
   SESSION_STATES,
 }));
 
 const persistentStreamRoutes = require('../persistentStream');
-const { PersistentStreamService } = require('../../services/persistentStreamService');
 
 describe('Persistent Stream API Routes', () => {
   let app;
-  let mockService;
 
   beforeEach(() => {
+    jest.clearAllMocks();
+
     app = express();
     app.use(express.json());
     app.use('/api/stream', persistentStreamRoutes);
-    
+
     // エラーハンドリングミドルウェア
     app.use((err, req, res, next) => {
       res.status(err.statusCode || 500).json({
-        error: err.message || 'Internal Server Error'
+        error: err.message || 'Internal Server Error',
       });
     });
-
-    // PersistentStreamServiceのモック
-    mockService = {
-      startSession: jest.fn(),
-      stopSession: jest.fn(),
-      getSessionStatus: jest.fn(),
-      getActiveSessions: jest.fn(),
-      switchToFile: jest.fn(),
-      switchToStandby: jest.fn(),
-      uploadStandbyImage: jest.fn(),
-    };
-
-    // コンストラクタをモック
-    PersistentStreamService.mockImplementation(() => mockService);
   });
 
   afterEach(() => {
@@ -79,7 +87,7 @@ describe('Persistent Stream API Routes', () => {
       };
 
       const response = await request(app).post('/api/stream/session/start').send(requestBody);
-      
+
       if (response.status !== 200) {
         console.log('Response error:', response.body);
       }
@@ -176,9 +184,10 @@ describe('Persistent Stream API Routes', () => {
 
   describe('GET /session/active', () => {
     test('アクティブセッション一覧が取得される', async () => {
+      const startTime = new Date();
       const activeSessions = [
-        { id: 'session1', startTime: new Date() },
-        { id: 'session2', startTime: new Date() },
+        { id: 'session1', startTime },
+        { id: 'session2', startTime },
       ];
 
       mockService.getActiveSessions.mockReturnValue(activeSessions);
@@ -186,7 +195,10 @@ describe('Persistent Stream API Routes', () => {
       const response = await request(app).get('/api/stream/session/active');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(activeSessions);
+      expect(response.body).toEqual([
+        { id: 'session1', startTime: startTime.toISOString() },
+        { id: 'session2', startTime: startTime.toISOString() },
+      ]);
     });
   });
 
