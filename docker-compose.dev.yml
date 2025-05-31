@@ -18,7 +18,7 @@ services:
     volumes:
       - ./frontend/src:/app/src # Mount source code
       - ./frontend/public:/app/public # Mount public assets
-      - ./frontend/.env:/app/.env # Mount environment file if exists
+      - ./frontend/.env.development:/app/.env # Mount development environment file
       - /app/node_modules # Use container's node_modules
     depends_on:
       - streamcaster-backend
