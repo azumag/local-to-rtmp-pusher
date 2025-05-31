@@ -18,6 +18,7 @@ describe('FileService', () => {
       name: 'test-video.mp4',
       path: '/uploads/test-video.mp4',
       size: 1024000,
+      source: 'local',
       createdAt: '2024-01-01T00:00:00.000Z',
     },
     {
@@ -25,7 +26,17 @@ describe('FileService', () => {
       name: 'another-video.mp4',
       path: '/uploads/another-video.mp4',
       size: 2048000,
+      source: 'local',
       createdAt: '2024-01-02T00:00:00.000Z',
+    },
+    {
+      id: '3',
+      name: 'gdrive-video.mp4',
+      path: '/cache/downloads/gdrive-video.mp4',
+      size: 3072000,
+      source: 'google_drive',
+      sourceId: 'gdrive-file-id-123',
+      createdAt: '2024-01-03T00:00:00.000Z',
     },
   ];
 
@@ -69,10 +80,34 @@ describe('FileService', () => {
   });
 
   describe('listFiles', () => {
-    it('should be an alias for getFiles', async () => {
+    it('should return all files by default', async () => {
       const files = await fileService.listFiles();
 
       expect(files).toEqual(mockFilesData);
+    });
+
+    it('should return all files when includeGoogleDrive is true', async () => {
+      const files = await fileService.listFiles(true);
+
+      expect(files).toEqual(mockFilesData);
+    });
+
+    it('should filter out Google Drive files when includeGoogleDrive is false', async () => {
+      const files = await fileService.listFiles(false);
+
+      expect(files).toHaveLength(2);
+      expect(files.every((f) => f.source !== 'google_drive')).toBe(true);
+      expect(files).toEqual([mockFilesData[0], mockFilesData[1]]);
+    });
+  });
+
+  describe('listLocalFiles', () => {
+    it('should only return local files', async () => {
+      const files = await fileService.listLocalFiles();
+
+      expect(files).toHaveLength(2);
+      expect(files.every((f) => f.source !== 'google_drive')).toBe(true);
+      expect(files).toEqual([mockFilesData[0], mockFilesData[1]]);
     });
   });
 

@@ -1,3 +1,13 @@
+#!/bin/sh
+
+echo "Starting RTMP server..."
+
+# Check if we're in a minimal CI environment where backend might not be available
+if [ "$CI_MODE" = "true" ]; then
+  echo "CI mode detected, creating nginx config without backend callbacks"
+  
+  # Create a CI-specific nginx config without backend callbacks
+  cat > /etc/nginx/nginx.conf << 'EOF'
 # Load the RTMP module
 load_module modules/ngx_rtmp_module.so;
 
@@ -30,12 +40,6 @@ rtmp {
             
             # RTMPプッシュの設定
             push_reconnect 1s;
-            
-            # 既存の接続を切断して新しい接続を許可
-            on_publish http://streamcaster-backend:3000/api/rtmp/on_publish;
-            on_publish_done http://streamcaster-backend:3000/api/rtmp/on_publish_done;
-            on_play http://streamcaster-backend:3000/api/rtmp/on_play;
-            on_play_done http://streamcaster-backend:3000/api/rtmp/on_play_done;
             
             # HLS設定
             hls on;
@@ -104,3 +108,34 @@ http {
         }
     }
 }
+EOF
+  
+  echo "CI nginx config created, starting nginx..."
+  exec nginx -g "daemon off;"
+fi
+
+# Wait for backend to be available (optional, with timeout)
+if [ -n "$BACKEND_HOST" ]; then
+  echo "Waiting for backend at $BACKEND_HOST..."
+  timeout=60
+  elapsed=0
+  
+  while [ $elapsed -lt $timeout ]; do
+    if wget --no-verbose --tries=1 --spider --timeout=5 "http://$BACKEND_HOST/api/health" 2>/dev/null; then
+      echo "Backend is available!"
+      break
+    fi
+    
+    echo "Backend not ready, waiting... ($elapsed/$timeout seconds)"
+    sleep 5
+    elapsed=$((elapsed + 5))
+  done
+  
+  if [ $elapsed -ge $timeout ]; then
+    echo "Warning: Backend not available after $timeout seconds, starting anyway..."
+  fi
+fi
+
+# Start nginx
+echo "Starting nginx..."
+exec nginx -g "daemon off;"

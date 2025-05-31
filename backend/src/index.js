@@ -30,6 +30,13 @@ logger.info(`Cache directory set to: ${CACHE_DIR}`);
 
 // ミドルウェアの設定
 app.use(cors());
+
+// リクエストログミドルウェア
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path} - ${req.ip}`);
+  next();
+});
+
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -41,11 +48,13 @@ app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
 const fileRoutes = require('./routes/files');
 const streamRoutes = require('./routes/stream');
 const googleDriveRoutes = require('./routes/googleDrive');
+const rtmpRoutes = require('./routes/rtmp');
 
 // ルートの設定
 app.use('/api/files', fileRoutes);
 app.use('/api/stream', streamRoutes);
 app.use('/api/google-drive', googleDriveRoutes);
+app.use('/api/rtmp', rtmpRoutes);
 
 // 基本的なヘルスチェックエンドポイント
 app.get('/api/health', (req, res) => {

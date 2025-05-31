@@ -14,7 +14,7 @@ const initFilesDb = () => {
 };
 
 // ファイル一覧の取得
-const getFiles = async () => {
+const getFiles = async (includeGoogleDrive = true) => {
   initFilesDb();
   try {
     const files = fs.readJsonSync(FILES_DB_PATH);
@@ -25,6 +25,12 @@ const getFiles = async () => {
       fs.writeJsonSync(FILES_DB_PATH, []);
       return [];
     }
+
+    // Google Driveファイルを除外する場合
+    if (!includeGoogleDrive) {
+      return files.filter((file) => file.source !== 'google_drive');
+    }
+
     return files;
   } catch (error) {
     console.error('ファイルの読み込みエラー:', error);
@@ -34,7 +40,10 @@ const getFiles = async () => {
 };
 
 // ファイル一覧の取得（getFilesのエイリアス）
-const listFiles = async () => getFiles();
+const listFiles = async (includeGoogleDrive = true) => getFiles(includeGoogleDrive);
+
+// ローカルファイルのみ取得
+const listLocalFiles = async () => getFiles(false);
 
 // ファイル情報の保存
 const saveFileInfo = async (fileData) => {
@@ -121,6 +130,7 @@ const updateFileStatus = async (fileId, status, additionalInfo = {}) => {
 module.exports = {
   getFiles,
   listFiles,
+  listLocalFiles,
   saveFileInfo,
   getFileById,
   deleteFile,

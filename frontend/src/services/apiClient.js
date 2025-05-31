@@ -12,8 +12,16 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000, // 15秒に増加
 });
+
+// Google Drive用の長いタイムアウト設定
+export const createGoogleDriveRequest = (config = {}) => {
+  return apiClient.request({
+    ...config,
+    timeout: 30000, // Google Drive操作は30秒のタイムアウト
+  });
+};
 
 // リクエストインターセプター
 apiClient.interceptors.request.use(
