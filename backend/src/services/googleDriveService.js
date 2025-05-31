@@ -201,10 +201,11 @@ const extractFolderId = async (shareUrl) => {
   try {
     // URLからフォルダIDを抽出するための正規表現パターン
     const patterns = [
-      /\/folders\/([a-zA-Z0-9_-]{33})/, // フォルダURLから
-      /\/drive\/folders\/([a-zA-Z0-9_-]{33})/, // 共有URLから
-      /id=([a-zA-Z0-9_-]{33})/, // id=パラメータから
-      /([a-zA-Z0-9_-]{33})/, // 単純なIDだけの場合
+      /\/folders\/([a-zA-Z0-9_-]+)(?:\?|$)/, // フォルダURLから（より柔軟）
+      /\/drive\/folders\/([a-zA-Z0-9_-]+)(?:\?|$)/, // 共有URLから（より柔軟）
+      /id=([a-zA-Z0-9_-]+)/, // id=パラメータから
+      /\/folders\/([a-zA-Z0-9_-]{33})/, // 従来の33文字ID
+      /([a-zA-Z0-9_-]{33,})/, // 33文字以上のID
     ];
 
     for (const pattern of patterns) {
@@ -270,38 +271,73 @@ const getFileInfo = async (fileId) => {
  */
 const listFilesFromShareUrl = async (shareUrl) => {
   try {
+    console.log(`Attempting to extract folder ID from URL: ${shareUrl}`);
     const folderId = await extractFolderId(shareUrl);
+    console.log(`Extracted folder ID: ${folderId}`);
 
-    // 注: 本来なら公式のGoogle Drive APIを使用すべきですが、
-    // 簡易的な方法として共有されたフォルダのHTMLから情報を抽出します
-    const response = await fetch(`https://drive.google.com/drive/folders/${folderId}`);
+    // フォルダーがアクセス可能かテスト
+    const testUrl = `https://drive.google.com/drive/folders/${folderId}`;
+    console.log(`Testing folder access: ${testUrl}`);
+
+    const response = await fetch(testUrl);
+
+    if (!response.ok) {
+      throw new Error(
+        `フォルダにアクセスできません (ステータス: ${response.status}). 共有設定を確認してください。`
+      );
+    }
+
     const html = await response.text();
 
-    // ファイル情報を抽出するための正規表現
-    const filePattern = /"([\w-]{33})",\["(.*?)","(.*?)","(.*?)"/g;
+    // HTMLが適切に取得できているかチェック
+    if (html.includes('You need permission') || html.includes('Request access')) {
+      throw new Error(
+        'フォルダへのアクセス権限がありません。共有設定が「リンクを知っている全ユーザー」になっていることを確認してください。'
+      );
+    }
+
+    // ファイル情報を抽出するための複数の正規表現パターン
+    const filePatterns = [
+      /"([\w-]{33,})",\["(.*?)","(.*?)","(.*?)"/g,
+      /\["([\w-]{33,})","([^"]*?)","([^"]*?)"/g,
+      /"id":"([\w-]{33,})"[^}]*"name":"([^"]*?)"[^}]*"mimeType":"([^"]*?)"/g,
+    ];
 
     const files = [];
-    let match = filePattern.exec(html);
 
-    while (match !== null) {
-      const [, id, name, mimeType] = match;
+    for (const filePattern of filePatterns) {
+      let match = filePattern.exec(html);
+      while (match !== null) {
+        const [, id, name, mimeType] = match;
 
-      // 動画ファイルのみフィルタリング
-      if (mimeType.startsWith('video/')) {
-        files.push({
-          id,
-          name,
-          mimeType,
-          downloadUrl: `https://drive.google.com/uc?export=download&id=${id}`,
-        });
+        // 動画ファイルのみフィルタリング
+        if (mimeType && mimeType.startsWith('video/')) {
+          files.push({
+            id,
+            name,
+            mimeType,
+            downloadUrl: `https://drive.google.com/uc?export=download&id=${id}`,
+          });
+        }
+        match = filePattern.exec(html);
       }
-      match = filePattern.exec(html);
+
+      // ファイルが見つかった場合は他のパターンを試さない
+      if (files.length > 0) break;
+    }
+
+    console.log(`Found ${files.length} video files in the folder`);
+
+    if (files.length === 0) {
+      throw new Error(
+        '指定されたフォルダに動画ファイルが見つかりません。フォルダが空であるか、動画ファイルが含まれていない可能性があります。'
+      );
     }
 
     return files;
   } catch (error) {
     console.error(`Error listing files from share URL: ${error.message}`);
-    throw new Error('Google Driveの共有URLからファイル一覧の取得に失敗しました');
+    throw new Error(`Google Driveの共有URLからファイル一覧の取得に失敗しました: ${error.message}`);
   }
 };
 
