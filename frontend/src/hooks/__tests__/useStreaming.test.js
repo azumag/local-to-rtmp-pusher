@@ -13,7 +13,7 @@ describe('useStreaming', () => {
       filePath: '/uploads/video1.mp4',
       outputUrl: 'rtmp://localhost/live/stream1',
       status: 'active',
-      startTime: '2024-01-01T00:00:00Z'
+      startTime: '2024-01-01T00:00:00Z',
     },
     {
       id: 'stream-2',
@@ -21,8 +21,8 @@ describe('useStreaming', () => {
       filePath: '/uploads/video2.mp4',
       outputUrl: 'rtmp://localhost/live/stream2',
       status: 'active',
-      startTime: '2024-01-01T01:00:00Z'
-    }
+      startTime: '2024-01-01T01:00:00Z',
+    },
   ];
 
   beforeEach(() => {
@@ -91,7 +91,7 @@ describe('useStreaming', () => {
   it('handles start stream error', async () => {
     const errorMessage = 'FFmpeg not found';
     streamService.startStream.mockRejectedValueOnce({
-      response: { data: { error: errorMessage } }
+      response: { data: { error: errorMessage } },
     });
 
     const { result } = renderHook(() => useStreaming());
@@ -102,7 +102,11 @@ describe('useStreaming', () => {
 
     await act(async () => {
       await expect(
-        result.current.startStream({ fileId: 'file-3', filePath: '/path', outputUrl: 'rtmp://localhost' })
+        result.current.startStream({
+          fileId: 'file-3',
+          filePath: '/path',
+          outputUrl: 'rtmp://localhost',
+        })
       ).rejects.toThrow(errorMessage);
     });
 

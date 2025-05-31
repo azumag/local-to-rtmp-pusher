@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, TextField, Button, Grid, FormControl, InputLabel, Select, MenuItem, Snackbar, Alert, Divider, Switch, FormControlLabel } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Paper,
+  TextField,
+  Button,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Snackbar,
+  Alert,
+  Divider,
+  Switch,
+  FormControlLabel,
+} from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import RestoreIcon from '@mui/icons-material/Restore';
 import { getRtmpServerInfo } from '../services/streamService';
@@ -30,7 +46,7 @@ const defaultSettings = {
     defaultFormat: 'rtmp',
     useInternalRtmpServer: true,
     autoStartStreaming: false,
-  }
+  },
 };
 
 function SettingsPage() {
@@ -86,7 +102,7 @@ function SettingsPage() {
   // 設定をリセット
   const handleResetSettings = () => {
     if (!window.confirm('設定をデフォルトに戻してもよろしいですか？')) return;
-    
+
     setSettings(defaultSettings);
     try {
       localStorage.removeItem(SETTINGS_STORAGE_KEY);
@@ -106,25 +122,25 @@ function SettingsPage() {
 
   // 設定の変更処理
   const handleSettingChange = (section, field, value) => {
-    setSettings(prev => ({
+    setSettings((prev) => ({
       ...prev,
       [section]: {
         ...prev[section],
-        [field]: value
-      }
+        [field]: value,
+      },
     }));
   };
 
   // 解像度変更のハンドラ
   const handleResolutionChange = (resolutionString) => {
-    const [width, height] = resolutionString.split('x').map(num => parseInt(num));
-    setSettings(prev => ({
+    const [width, height] = resolutionString.split('x').map((num) => parseInt(num));
+    setSettings((prev) => ({
       ...prev,
       video: {
         ...prev.video,
         width,
-        height
-      }
+        height,
+      },
     }));
   };
 
@@ -133,7 +149,7 @@ function SettingsPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         設定
       </Typography>
-      
+
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h2">
@@ -148,16 +164,12 @@ function SettingsPage() {
             >
               リセット
             </Button>
-            <Button
-              variant="contained"
-              startIcon={<SaveIcon />}
-              onClick={handleSaveSettings}
-            >
+            <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveSettings}>
               保存
             </Button>
           </Box>
         </Box>
-        
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <FormControl fullWidth margin="normal">
@@ -172,13 +184,15 @@ function SettingsPage() {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <FormControlLabel
               control={
                 <Switch
                   checked={settings.general.useInternalRtmpServer}
-                  onChange={(e) => handleSettingChange('general', 'useInternalRtmpServer', e.target.checked)}
+                  onChange={(e) =>
+                    handleSettingChange('general', 'useInternalRtmpServer', e.target.checked)
+                  }
                   color="primary"
                 />
               }
@@ -186,13 +200,15 @@ function SettingsPage() {
               sx={{ mt: 2 }}
             />
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <FormControlLabel
               control={
                 <Switch
                   checked={settings.general.autoStartStreaming}
-                  onChange={(e) => handleSettingChange('general', 'autoStartStreaming', e.target.checked)}
+                  onChange={(e) =>
+                    handleSettingChange('general', 'autoStartStreaming', e.target.checked)
+                  }
                   color="primary"
                 />
               }
@@ -202,18 +218,18 @@ function SettingsPage() {
           </Grid>
         </Grid>
       </Paper>
-      
+
       <Paper sx={{ p: 3, mb: 4 }}>
         <Typography variant="h6" component="h2" gutterBottom>
           RTMPサーバー設定
         </Typography>
-        
+
         {serverInfo && (
           <Alert severity="info" sx={{ mb: 2 }}>
             内蔵RTMPサーバーが利用可能です: {serverInfo.defaultServer}
           </Alert>
         )}
-        
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
             <TextField
@@ -237,12 +253,12 @@ function SettingsPage() {
           </Grid>
         </Grid>
       </Paper>
-      
+
       <Paper sx={{ p: 3, mb: 4 }}>
         <Typography variant="h6" component="h2" gutterBottom>
           デフォルト動画設定
         </Typography>
-        
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <FormControl fullWidth margin="normal">
@@ -258,7 +274,7 @@ function SettingsPage() {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <TextField
               label="ビットレート"
@@ -269,7 +285,7 @@ function SettingsPage() {
               helperText="例: 2500k, 3M"
             />
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <TextField
               label="フレームレート"
@@ -281,7 +297,7 @@ function SettingsPage() {
               InputProps={{ inputProps: { min: 1, max: 120 } }}
             />
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <FormControl fullWidth margin="normal">
               <InputLabel>解像度</InputLabel>
@@ -299,12 +315,12 @@ function SettingsPage() {
           </Grid>
         </Grid>
       </Paper>
-      
+
       <Paper sx={{ p: 3, mb: 4 }}>
         <Typography variant="h6" component="h2" gutterBottom>
           デフォルト音声設定
         </Typography>
-        
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <FormControl fullWidth margin="normal">
@@ -320,7 +336,7 @@ function SettingsPage() {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <TextField
               label="ビットレート"
@@ -331,13 +347,15 @@ function SettingsPage() {
               helperText="例: 128k, 192k"
             />
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <FormControl fullWidth margin="normal">
               <InputLabel>サンプルレート</InputLabel>
               <Select
                 value={settings.audio.sampleRate}
-                onChange={(e) => handleSettingChange('audio', 'sampleRate', parseInt(e.target.value))}
+                onChange={(e) =>
+                  handleSettingChange('audio', 'sampleRate', parseInt(e.target.value))
+                }
                 label="サンプルレート"
               >
                 <MenuItem value={48000}>48000 Hz</MenuItem>
@@ -346,7 +364,7 @@ function SettingsPage() {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <FormControl fullWidth margin="normal">
               <InputLabel>チャンネル数</InputLabel>
@@ -362,18 +380,10 @@ function SettingsPage() {
           </Grid>
         </Grid>
       </Paper>
-      
+
       {/* アラート */}
-      <Snackbar
-        open={alertOpen}
-        autoHideDuration={6000}
-        onClose={() => setAlertOpen(false)}
-      >
-        <Alert
-          onClose={() => setAlertOpen(false)}
-          severity={alertSeverity}
-          sx={{ width: '100%' }}
-        >
+      <Snackbar open={alertOpen} autoHideDuration={6000} onClose={() => setAlertOpen(false)}>
+        <Alert onClose={() => setAlertOpen(false)} severity={alertSeverity} sx={{ width: '100%' }}>
           {alertMessage}
         </Alert>
       </Snackbar>

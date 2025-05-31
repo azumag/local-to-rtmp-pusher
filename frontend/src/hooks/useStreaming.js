@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listActiveStreams, startStream as startStreamService, stopStream as stopStreamService, getStreamStatus as getStreamStatusService } from '../services/streamService';
+import {
+  listActiveStreams,
+  startStream as startStreamService,
+  stopStream as stopStreamService,
+  getStreamStatus as getStreamStatusService,
+} from '../services/streamService';
 
 const useStreaming = () => {
   const [activeStreams, setActiveStreams] = useState([]);
@@ -21,31 +26,37 @@ const useStreaming = () => {
   }, []);
 
   // Start a new stream
-  const startStream = useCallback(async (streamData) => {
-    try {
-      setError(null);
-      const result = await startStreamService(streamData);
-      await fetchStreams(); // Refresh stream list
-      return result;
-    } catch (err) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to start stream';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  }, [fetchStreams]);
+  const startStream = useCallback(
+    async (streamData) => {
+      try {
+        setError(null);
+        const result = await startStreamService(streamData);
+        await fetchStreams(); // Refresh stream list
+        return result;
+      } catch (err) {
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to start stream';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [fetchStreams]
+  );
 
   // Stop a stream
-  const stopStream = useCallback(async (streamId) => {
-    try {
-      setError(null);
-      await stopStreamService(streamId);
-      await fetchStreams(); // Refresh stream list
-    } catch (err) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to stop stream';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    }
-  }, [fetchStreams]);
+  const stopStream = useCallback(
+    async (streamId) => {
+      try {
+        setError(null);
+        await stopStreamService(streamId);
+        await fetchStreams(); // Refresh stream list
+      } catch (err) {
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to stop stream';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [fetchStreams]
+  );
 
   // Get stream status
   const getStreamStatus = useCallback(async (streamId) => {
@@ -59,14 +70,20 @@ const useStreaming = () => {
   }, []);
 
   // Check if a file is currently streaming
-  const isFileStreaming = useCallback((fileId) => {
-    return activeStreams.some(stream => stream.fileId === fileId);
-  }, [activeStreams]);
+  const isFileStreaming = useCallback(
+    (fileId) => {
+      return activeStreams.some((stream) => stream.fileId === fileId);
+    },
+    [activeStreams]
+  );
 
   // Get stream for a specific file
-  const getFileStream = useCallback((fileId) => {
-    return activeStreams.find(stream => stream.fileId === fileId);
-  }, [activeStreams]);
+  const getFileStream = useCallback(
+    (fileId) => {
+      return activeStreams.find((stream) => stream.fileId === fileId);
+    },
+    [activeStreams]
+  );
 
   // Initial fetch
   useEffect(() => {
@@ -88,7 +105,7 @@ const useStreaming = () => {
     getStreamStatus,
     isFileStreaming,
     getFileStream,
-    refreshStreams: fetchStreams
+    refreshStreams: fetchStreams,
   };
 };
 
