@@ -1,22 +1,61 @@
 const express = require('express');
+const { createLogger, format: winstonFormat, transports } = require('winston');
 
 const router = express.Router();
 const googleDriveService = require('../services/googleDriveService');
 
+// テスト用のシンプルなルート
+router.get('/test', (req, res) => {
+  console.log('TEST ROUTE HIT!');
+  console.error('TEST ROUTE ERROR LOG');
+  res.json({ message: 'Test route working', timestamp: new Date().toISOString() });
+});
+
+// ロガーを設定（シンプルなフォーマット）
+const logger = createLogger({
+  level: 'info',
+  format: winstonFormat.combine(
+    winstonFormat.timestamp(),
+    winstonFormat.printf(({ timestamp, level, message }) => `${timestamp} [${level}] ${message}`)
+  ),
+  transports: [new transports.Console()],
+});
+
 // Google Driveの共有URLからファイル一覧を取得
-router.post('/list', async (req, res, next) => {
-  try {
-    const { shareUrl } = req.body;
+router.post('/list', (req, res, next) => {
+  // 複数の方法でログ出力を試す
+  console.log('CONSOLE: Google Drive endpoint hit');
+  console.error('CONSOLE.ERROR: Google Drive endpoint hit');
+  process.stdout.write('STDOUT: Google Drive endpoint hit\n');
+  logger.info('LOGGER: Google Drive endpoint hit');
 
-    if (!shareUrl) {
-      return res.status(400).json({ error: 'Google Driveの共有URLが必要です' });
+  console.log('Request body:', JSON.stringify(req.body));
+
+  const handleRequest = async () => {
+    try {
+      const { shareUrl } = req.body;
+      logger.info(`Processing shareUrl: ${shareUrl}`);
+
+      if (!shareUrl) {
+        logger.warn('No shareUrl provided in request');
+        return res.status(400).json({ error: 'Google Driveの共有URLが必要です' });
+      }
+
+      logger.info('ShareUrl received, calling service...');
+      const files = await googleDriveService.listFilesFromShareUrl(shareUrl);
+      logger.info(`Service returned ${files.length} files`);
+
+      res.status(200).json(files);
+      logger.info('Response sent successfully');
+    } catch (error) {
+      logger.error('Error in Google Drive list handler');
+      logger.error(`Error message: ${error.message}`);
+      logger.error(`Error stack: ${error.stack}`);
+      next(error);
     }
+  };
 
-    const files = await googleDriveService.listFilesFromShareUrl(shareUrl);
-    res.status(200).json(files);
-  } catch (error) {
-    next(error);
-  }
+  handleRequest();
 });
 
 // Google DriveのファイルIDからファイル情報を取得

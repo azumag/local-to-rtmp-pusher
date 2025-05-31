@@ -99,12 +99,30 @@ function GoogleDrivePage() {
     setLoading(true);
     try {
       const response = await listFilesFromShareUrl(shareUrl);
-      setFiles(response.data);
+      console.log('API response:', response);
+      
+      // レスポンスデータの確認
+      const filesData = response.data || response;
+      console.log('Files data:', filesData);
+      
+      if (Array.isArray(filesData)) {
+        setFiles(filesData);
+      } else {
+        console.error('Unexpected response format:', filesData);
+        setFiles([]);
+      }
+      
       // 成功した場合にURLを保存
       saveToStorage(STORAGE_KEYS.GOOGLE_DRIVE_URL, shareUrl);
     } catch (error) {
       console.error('ファイル一覧の取得に失敗しました', error);
-      alert(`エラー: ${error.response?.data?.error || error.message || 'ファイル一覧の取得に失敗しました'}`);
+      const errorMessage = error.response?.data?.error || error.message || 'ファイル一覧の取得に失敗しました';
+      console.error('Error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      alert(`エラー: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

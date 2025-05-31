@@ -35,12 +35,14 @@ services:
     environment:
       - NODE_ENV=development
       - RTMP_SERVER=rtmp://streamcaster-rtmp:1935/live
+      - GOOGLE_API_KEY=AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
     volumes:
       - streamcaster-cache:/app/cache
       - ./backend/src:/app/src # Mount backend source for development if needed
-    depends_on:
-      streamcaster-rtmp:
-        condition: service_healthy
+      - ./.env:/app/.env # Mount environment file
+    # depends_on:
+    #   streamcaster-rtmp:
+    #     condition: service_healthy
     networks:
       - streamcaster-network
     restart: unless-stopped
