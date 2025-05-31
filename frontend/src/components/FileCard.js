@@ -8,7 +8,8 @@ import {
   Box,
   Chip,
   IconButton,
-  Tooltip
+  Tooltip,
+  CardMedia
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -26,7 +27,8 @@ const FileCard = ({
   isStreaming = false,
   showDownload = false,
   showDelete = true,
-  cardType = 'local' // 'local' or 'gdrive'
+  cardType = 'local', // 'local' or 'gdrive'
+  apiBaseUrl = process.env.REACT_APP_API_URL || '/api'
 }) => {
   const formatFileSize = (bytes) => {
     if (!bytes) return 'Unknown';
@@ -49,16 +51,65 @@ const FileCard = ({
   };
 
   const isFolder = file.mimeType?.includes('folder');
+  const thumbnailUrl = cardType === 'local' && file.id && !isFolder 
+    ? `${apiBaseUrl}/files/${file.id}/thumbnail` 
+    : null;
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+      {/* サムネイル表示 */}
+      {thumbnailUrl ? (
+        <CardMedia
+          component="img"
+          height="140"
+          image={thumbnailUrl}
+          alt={file.name}
+          sx={{
+            objectFit: 'cover',
+            backgroundColor: '#f5f5f5'
+          }}
+          onError={(e) => {
+            // サムネイル読み込みエラー時はアイコン表示にフォールバック
+            e.target.style.display = 'none';
+            e.target.nextSibling.style.display = 'flex';
+          }}
+        />
+      ) : null}
+      
+      {/* フォールバック用のアイコン表示 */}
+      {!thumbnailUrl && (
+        <Box 
+          sx={{ 
+            height: 140, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: '#f5f5f5',
+            color: '#666'
+          }}
+        >
           {getFileIcon()}
-          <Typography variant="h6" component="div" sx={{ ml: 1 }} noWrap>
-            {file.name}
-          </Typography>
         </Box>
+      )}
+      
+      {/* サムネイル読み込み失敗時のフォールバック */}
+      <Box 
+        sx={{ 
+          height: 140, 
+          display: 'none', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          backgroundColor: '#f5f5f5',
+          color: '#666'
+        }}
+      >
+        {getFileIcon()}
+      </Box>
+
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" component="div" sx={{ mb: 1 }} noWrap>
+          {file.name || file.originalName}
+        </Typography>
         
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {file.size && (

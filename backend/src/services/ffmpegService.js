@@ -1,7 +1,10 @@
 const ffmpeg = require('fluent-ffmpeg');
 const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs-extra');
 const logger = require('../utils/logger');
 const { STREAM_DEFAULTS, FFMPEG } = require('../config/constants');
+const { getCacheDir } = require('../utils/fileUtils');
 
 class FFmpegService {
   constructor() {
@@ -171,6 +174,53 @@ class FFmpegService {
         }
       });
     });
+  }
+
+  async generateThumbnail(videoPath, fileId) {
+    return new Promise((resolve, reject) => {
+      try {
+        // サムネイル保存ディレクトリを作成
+        const thumbnailDir = path.join(getCacheDir(), 'thumbnails');
+        fs.ensureDirSync(thumbnailDir);
+
+        // サムネイルファイル名（拡張子は.jpg）
+        const thumbnailPath = path.join(thumbnailDir, `${fileId}.jpg`);
+
+        // 既にサムネイルが存在する場合はそのパスを返す
+        if (fs.existsSync(thumbnailPath)) {
+          logger.info(`Thumbnail already exists: ${thumbnailPath}`);
+          resolve(thumbnailPath);
+          return;
+        }
+
+        logger.info(`Generating thumbnail for: ${videoPath}`);
+
+        // FFmpegコマンドでサムネイル生成
+        ffmpeg(videoPath)
+          .screenshots({
+            timestamps: ['5%'], // 動画の5%の位置でスクリーンショット
+            filename: `${fileId}.jpg`,
+            folder: thumbnailDir,
+            size: '320x180', // 小さなサムネイルサイズ
+          })
+          .on('end', () => {
+            logger.info(`Thumbnail generated: ${thumbnailPath}`);
+            resolve(thumbnailPath);
+          })
+          .on('error', (err) => {
+            logger.error(`Thumbnail generation failed: ${err.message}`);
+            reject(new Error(`サムネイル生成に失敗しました: ${err.message}`));
+          });
+      } catch (error) {
+        logger.error(`Thumbnail generation error: ${error.message}`);
+        reject(error);
+      }
+    });
+  }
+
+  getThumbnailPath(fileId) {
+    const thumbnailPath = path.join(getCacheDir(), 'thumbnails', `${fileId}.jpg`);
+    return fs.existsSync(thumbnailPath) ? thumbnailPath : null;
   }
 }
 

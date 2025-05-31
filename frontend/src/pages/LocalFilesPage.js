@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Button, Paper, Grid, Card, CardContent, CardMedia, CardActions, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, LinearProgress } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { Box, Typography, Button, Paper, Grid, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, LinearProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
@@ -9,6 +7,7 @@ import axios from 'axios';
 // APIサービスのインポート
 import { uploadFile, listFiles, deleteFile } from '../services/fileService';
 import { startStream } from '../services/streamService';
+import FileCard from '../components/FileCard';
 
 // ファイルアップロード用のスタイル付きコンポーネント
 const VisuallyHiddenInput = styled('input')({
@@ -207,41 +206,17 @@ function LocalFilesPage() {
           {files && Array.isArray(files) && files.length > 0 ? (
             files.map((file) => (
               <Grid item xs={12} sm={6} md={4} key={file.id}>
-                <Card>
-                  <CardMedia
-                    component="img"
-                    height="140"
-                    image={file.type === 'video' ? '/video-thumbnail.png' : '/file-thumbnail.png'}
-                    alt={file.originalName}
-                  />
-                  <CardContent>
-                    <Typography variant="h6" component="div" noWrap title={file.originalName}>
-                      {file.originalName}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      サイズ: {formatFileSize(file.size)}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      アップロード日: {new Date(file.createdAt).toLocaleString()}
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      size="small"
-                      startIcon={<PlayArrowIcon />}
-                      onClick={() => handleOpenStreamDialog(file)}
-                    >
-                      ストリーム
-                    </Button>
-                    <IconButton
-                      color="error"
-                      size="small"
-                      onClick={() => handleDeleteFile(file.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </CardActions>
-                </Card>
+                <FileCard
+                  file={{
+                    ...file,
+                    name: file.originalName,
+                    uploadDate: file.createdAt
+                  }}
+                  onStream={() => handleOpenStreamDialog(file)}
+                  onDelete={() => handleDeleteFile(file.id)}
+                  cardType="local"
+                  showDelete={true}
+                />
               </Grid>
             ))
           ) : (

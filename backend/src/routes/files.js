@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
 const fileService = require('../services/fileService');
+const ffmpegService = require('../services/ffmpegService');
 
 // ローカルファイルのアップロード設定
 const storage = multer.diskStorage({
@@ -73,6 +74,17 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     };
 
     const savedFile = await fileService.saveFileInfo(fileData);
+
+    // バックグラウンドでサムネイル生成（エラーがあっても処理は続行）
+    try {
+      await ffmpegService.generateThumbnail(savedFile.path, savedFile.id);
+    } catch (thumbnailError) {
+      console.warn(
+        `サムネイル生成に失敗しました (ファイル: ${savedFile.id}):`,
+        thumbnailError.message
+      );
+    }
+
     res.status(201).json(savedFile);
   } catch (error) {
     next(error);
@@ -101,6 +113,43 @@ router.delete('/:fileId', async (req, res, next) => {
     const { fileId } = req.params;
     await fileService.deleteFile(fileId);
     res.status(200).json({ message: 'ファイルが正常に削除されました' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// サムネイル取得
+router.get('/:fileId/thumbnail', async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+
+    // ファイル情報を取得してファイルが存在するか確認
+    const fileInfo = await fileService.getFileById(fileId);
+    if (!fileInfo) {
+      return res.status(404).json({ error: 'ファイルが見つかりません' });
+    }
+
+    // サムネイルパスを取得
+    let thumbnailPath = ffmpegService.getThumbnailPath(fileId);
+
+    // サムネイルが存在しない場合は生成を試みる
+    if (!thumbnailPath) {
+      try {
+        thumbnailPath = await ffmpegService.generateThumbnail(fileInfo.path, fileId);
+      } catch (thumbnailError) {
+        console.warn(`サムネイル生成に失敗しました:`, thumbnailError.message);
+        return res.status(404).json({ error: 'サムネイルを生成できませんでした' });
+      }
+    }
+
+    // サムネイル画像を返す
+    if (thumbnailPath && fs.existsSync(thumbnailPath)) {
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=86400'); // 24時間キャッシュ
+      res.sendFile(path.resolve(thumbnailPath));
+    } else {
+      res.status(404).json({ error: 'サムネイルが見つかりません' });
+    }
   } catch (error) {
     next(error);
   }
