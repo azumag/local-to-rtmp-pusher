@@ -105,8 +105,8 @@ const StreamStatusIndicator = ({ refreshInterval = 3000 }) => {
   };
 
   // アクティブなストリーム数
-  const activeCount = streams.filter(s => s.status === 'active').length;
-  const preparingCount = streams.filter(s => s.status === 'preparing').length;
+  const activeCount = streams.filter((s) => s.status === 'active').length;
+  const preparingCount = streams.filter((s) => s.status === 'preparing').length;
 
   if (streams.length === 0 && !loading && !error) {
     return null; // ストリームがない場合は非表示
@@ -135,15 +135,27 @@ const StreamStatusIndicator = ({ refreshInterval = 3000 }) => {
         ) : (
           <LiveIcon color={activeCount > 0 ? 'error' : 'action'} />
         )}
-        
+
         <Typography variant="body2" sx={{ flex: 1 }}>
-          {loading ? '更新中...' : error ? 'エラー' : 
-           activeCount > 0 ? `配信中 ${activeCount}` : 
-           preparingCount > 0 ? `準備中 ${preparingCount}` : 'ストリーム待機'}
+          {loading
+            ? '更新中...'
+            : error
+              ? 'エラー'
+              : activeCount > 0
+                ? `配信中 ${activeCount}`
+                : preparingCount > 0
+                  ? `準備中 ${preparingCount}`
+                  : 'ストリーム待機'}
         </Typography>
 
         <Tooltip title="更新">
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); fetchStreams(); }}>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              fetchStreams();
+            }}
+          >
             <RefreshIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -190,7 +202,7 @@ const StreamItem = ({ stream }) => {
           console.error('Failed to fetch download status:', err);
         }
       };
-      
+
       fetchDownloadStatus();
       const interval = setInterval(fetchDownloadStatus, 2000);
       return () => clearInterval(interval);
@@ -249,20 +261,22 @@ const StreamItem = ({ stream }) => {
   };
 
   const fileName = stream.fileName || 'Unknown File';
-  const duration = stream.startedAt ? 
-    Math.floor((Date.now() - new Date(stream.startedAt).getTime()) / 1000) : 0;
+  const duration = stream.startedAt
+    ? Math.floor((Date.now() - new Date(stream.startedAt).getTime()) / 1000)
+    : 0;
 
   return (
     <Box sx={{ p: 1, border: 1, borderColor: 'divider', borderRadius: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         {getStatusIcon(stream.status)}
-        <Chip 
-          label={getStatusText(stream.status)} 
-          size="small" 
+        <Chip
+          label={getStatusText(stream.status)}
+          size="small"
           color={getStatusColor(stream.status)}
         />
         <Typography variant="caption" sx={{ ml: 'auto' }}>
-          {duration > 0 && `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`}
+          {duration > 0 &&
+            `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`}
         </Typography>
       </Box>
 
@@ -276,9 +290,9 @@ const StreamItem = ({ stream }) => {
           <Typography variant="caption" color="text.secondary">
             ダウンロード中: {downloadStatus.progress || 0}%
           </Typography>
-          <LinearProgress 
-            variant="determinate" 
-            value={downloadStatus.progress || 0} 
+          <LinearProgress
+            variant="determinate"
+            value={downloadStatus.progress || 0}
             sx={{ height: 4, borderRadius: 2 }}
           />
         </Box>

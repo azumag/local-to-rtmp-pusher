@@ -24,7 +24,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import HomePage from './pages/HomePage';
 import LocalFilesPage from './pages/LocalFilesPage';
 import GoogleDrivePage from './pages/GoogleDrivePage';
-import StreamsPage from './pages/StreamsPage';
+import NewStreamsPage from './pages/NewStreamsPage';
 import SettingsPage from './pages/SettingsPage';
 
 // コンポーネントのインポート
@@ -77,7 +77,7 @@ function MainNavigation() {
 
   // 現在のタブ値を取得
   const getCurrentTabValue = () => {
-    const currentItem = menuItems.find(item => item.path === location.pathname);
+    const currentItem = menuItems.find((item) => item.path === location.pathname);
     return currentItem ? currentItem.value : 0;
   };
 
@@ -86,109 +86,107 @@ function MainNavigation() {
       {/* トップメニューバー */}
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
-            {/* アプリケーション名 */}
-            <Typography variant="h6" component="div" sx={{ flexGrow: 0, mr: 4 }}>
-              StreamCaster
-            </Typography>
+          {/* アプリケーション名 */}
+          <Typography variant="h6" component="div" sx={{ flexGrow: 0, mr: 4 }}>
+            StreamCaster
+          </Typography>
 
-            {/* デスクトップメニュー */}
-            {!isMobile ? (
-              <Tabs
-                value={getCurrentTabValue()}
-                onChange={(event, newValue) => {
-                  const selectedItem = menuItems.find(item => item.value === newValue);
-                  if (selectedItem) {
-                    navigate(selectedItem.path);
-                  }
-                }}
-                sx={{
-                  flexGrow: 1,
-                  '& .MuiTabs-indicator': {
-                    backgroundColor: 'white',
+          {/* デスクトップメニュー */}
+          {!isMobile ? (
+            <Tabs
+              value={getCurrentTabValue()}
+              onChange={(event, newValue) => {
+                const selectedItem = menuItems.find((item) => item.value === newValue);
+                if (selectedItem) {
+                  navigate(selectedItem.path);
+                }
+              }}
+              sx={{
+                flexGrow: 1,
+                '& .MuiTabs-indicator': {
+                  backgroundColor: 'white',
+                },
+                '& .MuiTab-root': {
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  '&.Mui-selected': {
+                    color: 'white',
                   },
-                  '& .MuiTab-root': {
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    '&.Mui-selected': {
-                      color: 'white',
-                    },
-                  },
-                }}
-              >
-                {menuItems.map((item) => (
-                  <Tab
-                    key={item.value}
-                    icon={item.icon}
-                    label={item.text}
-                    iconPosition="start"
-                    sx={{
-                      minHeight: 64,
-                      textTransform: 'none',
-                      fontSize: '0.875rem',
-                    }}
-                  />
-                ))}
-              </Tabs>
-            ) : (
-              // モバイルメニュー
-              <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                <IconButton
-                  color="inherit"
-                  onClick={handleMobileMenuOpen}
-                  aria-label="メニューを開く"
-                >
-                  <MenuIcon />
-                </IconButton>
-              </Box>
-            )}
-          </Toolbar>
-        </AppBar>
-
-        {/* モバイル用ドロップダウンメニュー */}
-        <Menu
-          anchorEl={mobileMenuAnchor}
-          open={Boolean(mobileMenuAnchor)}
-          onClose={handleMobileMenuClose}
-          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-        >
-          {menuItems.map((item) => (
-            <MenuItem
-              key={item.value}
-              onClick={() => handleNavigate(item.path)}
-              selected={location.pathname === item.path}
-              sx={{ minWidth: 200 }}
+                },
+              }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                {item.icon}
-              </Box>
-              {item.text}
-            </MenuItem>
-          ))}
-        </Menu>
+              {menuItems.map((item) => (
+                <Tab
+                  key={item.value}
+                  icon={item.icon}
+                  label={item.text}
+                  iconPosition="start"
+                  sx={{
+                    minHeight: 64,
+                    textTransform: 'none',
+                    fontSize: '0.875rem',
+                  }}
+                />
+              ))}
+            </Tabs>
+          ) : (
+            // モバイルメニュー
+            <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <IconButton
+                color="inherit"
+                onClick={handleMobileMenuOpen}
+                aria-label="メニューを開く"
+              >
+                <MenuIcon />
+              </IconButton>
+            </Box>
+          )}
+        </Toolbar>
+      </AppBar>
 
-        {/* メインコンテンツ */}
-        <Box
-          component="main"
-          sx={{
-            backgroundColor: theme => theme.palette.background.default,
-            flexGrow: 1,
-            pt: 8, // AppBarの高さ分のパディング
-          }}
-        >
-          <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/local-files" element={<LocalFilesPage />} />
-              <Route path="/google-drive" element={<GoogleDrivePage />} />
-              <Route path="/streams" element={<StreamsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
-          </Container>
-        </Box>
+      {/* モバイル用ドロップダウンメニュー */}
+      <Menu
+        anchorEl={mobileMenuAnchor}
+        open={Boolean(mobileMenuAnchor)}
+        onClose={handleMobileMenuClose}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        {menuItems.map((item) => (
+          <MenuItem
+            key={item.value}
+            onClick={() => handleNavigate(item.path)}
+            selected={location.pathname === item.path}
+            sx={{ minWidth: 200 }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>{item.icon}</Box>
+            {item.text}
+          </MenuItem>
+        ))}
+      </Menu>
 
-        {/* ストリーミング状態インジケータ */}
-        <StreamStatusIndicator />
+      {/* メインコンテンツ */}
+      <Box
+        component="main"
+        sx={{
+          backgroundColor: (theme) => theme.palette.background.default,
+          flexGrow: 1,
+          pt: 8, // AppBarの高さ分のパディング
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/local-files" element={<LocalFilesPage />} />
+            <Route path="/google-drive" element={<GoogleDrivePage />} />
+            <Route path="/streams" element={<NewStreamsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </Container>
       </Box>
+
+      {/* ストリーミング状態インジケータ */}
+      <StreamStatusIndicator />
+    </Box>
   );
 }
 
@@ -222,7 +220,7 @@ class ErrorBoundary extends React.Component {
 
 function App() {
   console.log('App component rendering...');
-  
+
   return (
     <ErrorBoundary>
       <ThemeProvider theme={theme}>

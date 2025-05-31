@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Box, 
-  Typography, 
-  Card, 
-  CardContent, 
-  Button, 
-  Grid, 
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Button,
+  Grid,
   Paper,
   Chip,
   List,
@@ -15,7 +15,7 @@ import {
   ListItemSecondaryAction,
   IconButton,
   Alert,
-  CircularProgress
+  CircularProgress,
 } from '@mui/material';
 import StreamIcon from '@mui/icons-material/Stream';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -32,7 +32,10 @@ function HomePage() {
   const { activeStreams, isLoading: streamsLoading } = useStreaming();
   const [files, setFiles] = useState([]);
   const [filesLoading, setFilesLoading] = useState(true);
-  const [googleDriveStatus, setGoogleDriveStatus] = useState({ connected: false, accountInfo: null });
+  const [googleDriveStatus, setGoogleDriveStatus] = useState({
+    connected: false,
+    accountInfo: null,
+  });
 
   useEffect(() => {
     fetchFiles();
@@ -56,7 +59,7 @@ function HomePage() {
     setGoogleDriveStatus({
       connected: false,
       accountInfo: null,
-      lastSync: null
+      lastSync: null,
     });
   };
 
@@ -104,13 +107,13 @@ function HomePage() {
                   ストリーム状況
                 </Typography>
               </Box>
-              
+
               {streamsLoading ? (
                 <CircularProgress />
               ) : (
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Chip 
+                    <Chip
                       label={activeStreams.length > 0 ? '配信中' : '停止中'}
                       color={activeStreams.length > 0 ? 'success' : 'default'}
                       icon={activeStreams.length > 0 ? <PlayArrowIcon /> : <StopIcon />}
@@ -120,12 +123,12 @@ function HomePage() {
                       アクティブなストリーム: {activeStreams.length}件
                     </Typography>
                   </Box>
-                  
+
                   {activeStreams.length > 0 && (
                     <List dense>
                       {activeStreams.slice(0, 3).map((stream, index) => (
                         <ListItem key={index}>
-                          <ListItemText 
+                          <ListItemText
                             primary={stream.fileName || `ストリーム ${index + 1}`}
                             secondary={`${stream.rtmpUrl || 'N/A'}`}
                           />
@@ -133,13 +136,9 @@ function HomePage() {
                       ))}
                     </List>
                   )}
-                  
+
                   <Box sx={{ mt: 2 }}>
-                    <Button 
-                      variant="outlined" 
-                      onClick={() => navigate('/streams')}
-                      fullWidth
-                    >
+                    <Button variant="outlined" onClick={() => navigate('/streams')} fullWidth>
                       ストリーム管理を開く
                     </Button>
                   </Box>
@@ -163,7 +162,7 @@ function HomePage() {
                   Google Drive
                 </Typography>
               </Box>
-              
+
               {googleDriveStatus.connected ? (
                 <Box>
                   <Alert severity="success" sx={{ mb: 2 }}>
@@ -185,12 +184,8 @@ function HomePage() {
                   未接続
                 </Alert>
               )}
-              
-              <Button 
-                variant="outlined" 
-                onClick={() => navigate('/google-drive')}
-                fullWidth
-              >
+
+              <Button variant="outlined" onClick={() => navigate('/google-drive')} fullWidth>
                 Google Driveを管理
               </Button>
             </CardContent>
@@ -207,7 +202,7 @@ function HomePage() {
                   最近のファイル
                 </Typography>
               </Box>
-              
+
               {filesLoading ? (
                 <CircularProgress />
               ) : files.length === 0 ? (
@@ -218,13 +213,13 @@ function HomePage() {
                 <List>
                   {files.map((file) => (
                     <ListItem key={file.id}>
-                      <ListItemText 
+                      <ListItemText
                         primary={file.originalName}
                         secondary={`${formatFileSize(file.size)} • ${formatDate(file.uploadedAt)}`}
                       />
                       <ListItemSecondaryAction>
-                        <IconButton 
-                          edge="end" 
+                        <IconButton
+                          edge="end"
                           onClick={() => handleDeleteFile(file.id)}
                           size="small"
                         >
@@ -235,17 +230,17 @@ function HomePage() {
                   ))}
                 </List>
               )}
-              
+
               <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                <Button 
-                  variant="outlined" 
+                <Button
+                  variant="outlined"
                   onClick={() => navigate('/local-files')}
                   sx={{ flex: 1 }}
                 >
                   すべてのファイルを見る
                 </Button>
-                <Button 
-                  variant="contained" 
+                <Button
+                  variant="contained"
                   onClick={() => navigate('/local-files')}
                   sx={{ flex: 1 }}
                 >

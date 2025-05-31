@@ -45,7 +45,7 @@ export const streamFile = (streamData) => {
   return createGoogleDriveRequest({
     method: 'post',
     url: '/google-drive/stream',
-    data: streamData
+    data: streamData,
   });
 };
 
