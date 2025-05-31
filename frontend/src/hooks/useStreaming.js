@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { streamService } from '../services/streamService';
+import { listActiveStreams, startStream as startStreamService, stopStream as stopStreamService, getStreamStatus as getStreamStatusService } from '../services/streamService';
 
 const useStreaming = () => {
   const [activeStreams, setActiveStreams] = useState([]);
@@ -11,8 +11,8 @@ const useStreaming = () => {
     try {
       setIsLoading(true);
       setError(null);
-      const streams = await streamService.getStreams();
-      setActiveStreams(streams);
+      const response = await listActiveStreams();
+      setActiveStreams(response.data || []);
     } catch (err) {
       setError(err.message || 'Failed to fetch streams');
     } finally {
@@ -21,10 +21,10 @@ const useStreaming = () => {
   }, []);
 
   // Start a new stream
-  const startStream = useCallback(async (fileId, filePath, outputUrl, settings = {}) => {
+  const startStream = useCallback(async (streamData) => {
     try {
       setError(null);
-      const result = await streamService.startStream(fileId, filePath, outputUrl, settings);
+      const result = await startStreamService(streamData);
       await fetchStreams(); // Refresh stream list
       return result;
     } catch (err) {
@@ -38,7 +38,7 @@ const useStreaming = () => {
   const stopStream = useCallback(async (streamId) => {
     try {
       setError(null);
-      await streamService.stopStream(streamId);
+      await stopStreamService(streamId);
       await fetchStreams(); // Refresh stream list
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || 'Failed to stop stream';
@@ -50,8 +50,8 @@ const useStreaming = () => {
   // Get stream status
   const getStreamStatus = useCallback(async (streamId) => {
     try {
-      const status = await streamService.getStreamStatus(streamId);
-      return status;
+      const response = await getStreamStatusService(streamId);
+      return response.data;
     } catch (err) {
       console.error('Failed to get stream status:', err);
       return null;
