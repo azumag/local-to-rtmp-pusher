@@ -6,14 +6,20 @@ import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import reportWebVitals from './reportWebVitals';
 
-console.log('index.js loaded');
+if (process.env.NODE_ENV === 'development') {
+  console.log('index.js loaded');
+}
 
 const rootElement = document.getElementById('root');
-console.log('Root element:', rootElement);
+if (process.env.NODE_ENV === 'development') {
+  console.log('Root element:', rootElement);
+}
 
 if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
-  console.log('Creating React root...');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Creating React root...');
+  }
   
   root.render(
     <React.StrictMode>
