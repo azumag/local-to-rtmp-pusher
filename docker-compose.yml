@@ -5,10 +5,17 @@ services:
     ports:
       - '8080:80'
     depends_on:
-      - streamcaster-backend
+      streamcaster-backend:
+        condition: service_healthy
     networks:
       - streamcaster-network
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:80']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   streamcaster-backend:
     build: ./backend
@@ -21,10 +28,17 @@ services:
     volumes:
       - streamcaster-cache:/app/cache
     depends_on:
-      - streamcaster-rtmp
+      streamcaster-rtmp:
+        condition: service_healthy
     networks:
       - streamcaster-network
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   streamcaster-rtmp:
     image: tiangolo/nginx-rtmp
@@ -38,6 +52,12 @@ services:
     networks:
       - streamcaster-network
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:8000/stat']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 networks:
   streamcaster-network:
