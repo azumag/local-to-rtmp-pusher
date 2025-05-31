@@ -1,0 +1,17 @@
+FROM node:18-alpine
+
+# Create app directory
+WORKDIR /app
+
+# Install app dependencies
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Expose port 3000 for development server
+EXPOSE 3000
+
+# Start the development server with hot reload
+CMD ["npm", "start"]
