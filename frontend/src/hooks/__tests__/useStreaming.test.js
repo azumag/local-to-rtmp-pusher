@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import useStreaming from '../useStreaming';
-import { streamService } from '../../services/streamService';
+import * as streamService from '../../services/streamService';
 
 // Mock the stream service
 jest.mock('../../services/streamService');
@@ -28,10 +28,10 @@ describe('useStreaming', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    streamService.getStreams.mockResolvedValue(mockStreams);
-    streamService.startStream.mockResolvedValue({ id: 'new-stream', status: 'started' });
-    streamService.stopStream.mockResolvedValue({ success: true });
-    streamService.getStreamStatus.mockResolvedValue({ status: 'active' });
+    streamService.listActiveStreams.mockResolvedValue({ data: mockStreams });
+    streamService.startStream.mockResolvedValue({ data: { id: 'new-stream', status: 'started' } });
+    streamService.stopStream.mockResolvedValue({ data: { success: true } });
+    streamService.getStreamStatus.mockResolvedValue({ data: { status: 'active' } });
   });
 
   afterEach(() => {
@@ -49,12 +49,12 @@ describe('useStreaming', () => {
       expect(result.current.error).toBe(null);
     });
 
-    expect(streamService.getStreams).toHaveBeenCalledTimes(1);
+    expect(streamService.listActiveStreams).toHaveBeenCalledTimes(1);
   });
 
   it('handles fetch error', async () => {
     const errorMessage = 'Network error';
-    streamService.getStreams.mockRejectedValueOnce(new Error(errorMessage));
+    streamService.listActiveStreams.mockRejectedValueOnce(new Error(errorMessage));
 
     const { result } = renderHook(() => useStreaming());
 
@@ -77,13 +77,15 @@ describe('useStreaming', () => {
     const outputUrl = 'rtmp://localhost/live/stream3';
     const settings = { videoCodec: 'libx264' };
 
+    const streamData = { fileId, filePath, outputUrl, ...settings };
+
     await act(async () => {
-      const response = await result.current.startStream(fileId, filePath, outputUrl, settings);
-      expect(response).toEqual({ id: 'new-stream', status: 'started' });
+      const response = await result.current.startStream(streamData);
+      expect(response.data).toEqual({ id: 'new-stream', status: 'started' });
     });
 
-    expect(streamService.startStream).toHaveBeenCalledWith(fileId, filePath, outputUrl, settings);
-    expect(streamService.getStreams).toHaveBeenCalledTimes(2); // Initial + after start
+    expect(streamService.startStream).toHaveBeenCalledWith(streamData);
+    expect(streamService.listActiveStreams).toHaveBeenCalledTimes(2); // Initial + after start
   });
 
   it('handles start stream error', async () => {
@@ -100,7 +102,7 @@ describe('useStreaming', () => {
 
     await act(async () => {
       await expect(
-        result.current.startStream('file-3', '/path', 'rtmp://localhost')
+        result.current.startStream({ fileId: 'file-3', filePath: '/path', outputUrl: 'rtmp://localhost' })
       ).rejects.toThrow(errorMessage);
     });
 
@@ -121,7 +123,7 @@ describe('useStreaming', () => {
     });
 
     expect(streamService.stopStream).toHaveBeenCalledWith(streamId);
-    expect(streamService.getStreams).toHaveBeenCalledTimes(2); // Initial + after stop
+    expect(streamService.listActiveStreams).toHaveBeenCalledTimes(2); // Initial + after stop
   });
 
   it('checks if file is streaming', async () => {
@@ -150,7 +152,7 @@ describe('useStreaming', () => {
     renderHook(() => useStreaming());
 
     await waitFor(() => {
-      expect(streamService.getStreams).toHaveBeenCalledTimes(1);
+      expect(streamService.listActiveStreams).toHaveBeenCalledTimes(1);
     });
 
     // Fast-forward 5 seconds
@@ -159,7 +161,7 @@ describe('useStreaming', () => {
     });
 
     await waitFor(() => {
-      expect(streamService.getStreams).toHaveBeenCalledTimes(2);
+      expect(streamService.listActiveStreams).toHaveBeenCalledTimes(2);
     });
 
     // Fast-forward another 5 seconds
@@ -168,7 +170,7 @@ describe('useStreaming', () => {
     });
 
     await waitFor(() => {
-      expect(streamService.getStreams).toHaveBeenCalledTimes(3);
+      expect(streamService.listActiveStreams).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -176,7 +178,7 @@ describe('useStreaming', () => {
     const { unmount } = renderHook(() => useStreaming());
 
     await waitFor(() => {
-      expect(streamService.getStreams).toHaveBeenCalledTimes(1);
+      expect(streamService.listActiveStreams).toHaveBeenCalledTimes(1);
     });
 
     unmount();
@@ -186,8 +188,8 @@ describe('useStreaming', () => {
       jest.advanceTimersByTime(10000);
     });
 
-    // Should not call getStreams again after unmount
-    expect(streamService.getStreams).toHaveBeenCalledTimes(1);
+    // Should not call listActiveStreams again after unmount
+    expect(streamService.listActiveStreams).toHaveBeenCalledTimes(1);
   });
 
   it('manually refreshes streams', async () => {
@@ -201,6 +203,6 @@ describe('useStreaming', () => {
       await result.current.refreshStreams();
     });
 
-    expect(streamService.getStreams).toHaveBeenCalledTimes(2);
+    expect(streamService.listActiveStreams).toHaveBeenCalledTimes(2);
   });
 });
