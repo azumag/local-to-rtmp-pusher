@@ -105,7 +105,7 @@ function App() {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" noWrap component="div">
-              Local to RTMP Pusher
+              StreamCaster
             </Typography>
           </Toolbar>
         </AppBar>

@@ -1,7 +1,7 @@
 {
-  "name": "local-to-rtmp-pusher-backend",
+  "name": "streamcaster-backend",
   "version": "1.0.0",
-  "description": "Backend for local-to-rtmp-pusher system",
+  "description": "Backend for StreamCaster - Professional streaming platform",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

@@ -1,6 +1,6 @@
 {
-  "short_name": "RTMP Pusher",
-  "name": "Local to RTMP Pusher",
+  "short_name": "StreamCaster",
+  "name": "StreamCaster",
   "icons": [
     {
       "src": "favicon.ico",

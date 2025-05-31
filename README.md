@@ -1,6 +1,6 @@
-# Local to RTMP Pusher
+# StreamCaster
 
-A web-based media streaming system that allows you to stream video files from local storage or Google Drive to RTMP/SRT endpoints using FFmpeg.
+A professional web-based media streaming platform that allows you to stream video files from local storage or Google Drive to RTMP/SRT endpoints using FFmpeg.
 
 ## Features
 
@@ -19,28 +19,28 @@ graph TD
     subgraph "User"
         A[Web Browser] --> B[Frontend UI]
     end
-    
+
     subgraph "Docker Containers"
         subgraph "Frontend Container"
             B[React App]
         end
-        
+
         subgraph "Backend Container"
             C[Express API Server]
             D[Google Drive Service]
             E[FFmpeg Stream Manager]
         end
-        
+
         subgraph "RTMP Server Container"
             F[Nginx RTMP Server]
         end
     end
-    
+
     B --> C
     C --> D
     C --> E
     E --> F
-    
+
     D --> G[Google Drive]
     F --> H[External Streaming Platforms]
 ```
@@ -54,17 +54,20 @@ graph TD
 ## Quick Start
 
 1. Clone the repository:
+
 ```bash
-git clone https://github.com/azumag/local-to-rtmp-pusher.git
-cd local-to-rtmp-pusher
+git clone https://github.com/azumag/streamcaster.git
+cd streamcaster
 ```
 
 2. Start the application:
+
 ```bash
 docker-compose up -d
 ```
 
 3. Access the web interface:
+
 - Frontend: http://localhost:3000
 - RTMP Server: rtmp://localhost:1935/live
 
@@ -80,6 +83,7 @@ docker-compose up -d
 ### Manual Setup
 
 1. Install dependencies:
+
 ```bash
 # Backend
 cd backend
@@ -91,6 +95,7 @@ npm install
 ```
 
 2. Start development servers:
+
 ```bash
 # Backend (from backend directory)
 npm run dev
@@ -115,6 +120,7 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 ### Stream Settings
 
 Default stream settings can be configured in the web interface:
+
 - Video Codec: libx264, libx265, copy
 - Audio Codec: aac, mp3, copy
 - Video Bitrate: 1000k - 8000k
@@ -126,15 +132,18 @@ Default stream settings can be configured in the web interface:
 ### Endpoints
 
 #### Files
+
 - `GET /api/files` - List uploaded files
 - `POST /api/files/upload` - Upload a new file
 - `DELETE /api/files/:id` - Delete a file
 
 #### Google Drive
+
 - `POST /api/google-drive/list` - List files from a shared folder
 - `POST /api/google-drive/download` - Download a file from Google Drive
 
 #### Streams
+
 - `GET /api/streams` - List active streams
 - `POST /api/streams/start` - Start a new stream
 - `POST /api/streams/stop/:id` - Stop a stream
@@ -215,6 +224,7 @@ This project uses GitHub Actions for continuous integration and deployment:
 ### Common Issues
 
 1. **Port already in use**
+
    ```bash
    # Change ports in docker-compose.yml or stop conflicting services
    docker-compose down
@@ -222,6 +232,7 @@ This project uses GitHub Actions for continuous integration and deployment:
    ```
 
 2. **FFmpeg not found**
+
    ```bash
    # Rebuild containers
    docker-compose build --no-cache
@@ -234,6 +245,7 @@ This project uses GitHub Actions for continuous integration and deployment:
 ### Logs
 
 View container logs:
+
 ```bash
 # All containers
 docker-compose logs -f

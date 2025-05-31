@@ -1,162 +1,225 @@
-name: CI Pipeline
+name: StreamCaster CI Pipeline
 
 on:
   push:
-    branches: [ main, develop, 'feature/**', 'fix/**' ]
+    branches: [main, develop, 'feature/**', 'fix/**']
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [16.x, 18.x, 20.x]
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        cache-dependency-path: backend/package-lock.json
-    
-    - name: Install FFmpeg
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-    
-    - name: Install dependencies
-      working-directory: ./backend
-      run: npm ci
-    
-    - name: Run tests
-      working-directory: ./backend
-      run: npm test
-    
-    - name: Generate coverage report
-      working-directory: ./backend
-      run: npm run test:coverage
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        directory: ./backend/coverage
-        flags: backend
-        name: backend-coverage
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./backend
+        run: npm test
+
+      - name: Generate coverage report
+        working-directory: ./backend
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./backend/coverage
+          flags: backend
+          name: backend-coverage
 
   frontend-test:
     name: Frontend Tests
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [16.x, 18.x, 20.x]
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-    
-    - name: Install dependencies
-      working-directory: ./frontend
-      run: npm ci
-    
-    - name: Run tests
-      working-directory: ./frontend
-      run: npm test -- --coverage --watchAll=false
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        directory: ./frontend/coverage
-        flags: frontend
-        name: frontend-coverage
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./frontend
+        run: npm test -- --coverage --watchAll=false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./frontend/coverage
+          flags: frontend
+          name: frontend-coverage
 
   lint:
     name: Linting
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18.x'
-    
-    - name: Install backend dependencies
-      working-directory: ./backend
-      run: npm ci
-    
-    - name: Install frontend dependencies
-      working-directory: ./frontend
-      run: npm ci
-    
-    - name: Lint backend
-      working-directory: ./backend
-      run: npm run lint || true
-    
-    - name: Lint frontend
-      working-directory: ./frontend
-      run: npm run lint || true
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Lint backend
+        working-directory: ./backend
+        run: npm run lint || true
+
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: npm run lint || true
 
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build backend Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./backend
-        push: false
-        tags: local-to-rtmp-pusher-backend:test
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Build frontend Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./frontend
-        push: false
-        tags: local-to-rtmp-pusher-frontend:test
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Build RTMP server Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./rtmp-server
-        push: false
-        tags: local-to-rtmp-pusher-rtmp:test
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Test Docker Compose
-      run: |
-        docker compose version
-        docker compose config
-        docker compose build
-        docker compose up -d
-        sleep 10
-        docker compose ps
-        curl -f http://localhost:8080 || exit 1
-        docker compose down
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          tags: streamcaster-backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          tags: streamcaster-frontend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build RTMP server Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./rtmp-server
+          push: false
+          tags: streamcaster-rtmp:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker Compose
+        run: |
+          docker compose version
+          docker compose config
+          docker compose build
+          docker compose up -d
+
+          # Wait for services to be ready
+          echo "Waiting for services to be ready..."
+          timeout=180  # 3 minutes timeout
+          elapsed=0
+
+          while [ $elapsed -lt $timeout ]; do
+            docker compose ps
+            
+            # Simple check: all containers running
+            running_count=$(docker compose ps --format table | grep -c "Up")
+            total_count=$(docker compose ps --format table | grep -c streamcaster)
+            
+            echo "Running services: $running_count/$total_count"
+            
+            if [ "$running_count" -eq "$total_count" ] && [ "$total_count" -eq 3 ]; then
+              echo "All services are running!"
+              sleep 10  # Additional wait for service startup
+              break
+            fi
+            
+            echo "Waiting for services to start... ($elapsed/$timeout seconds)"
+            sleep 10
+            elapsed=$((elapsed + 10))
+          done
+
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for services to start"
+            docker compose ps
+            docker compose logs
+            exit 1
+          fi
+
+          # Test frontend accessibility
+          echo "Testing frontend..."
+          for i in {1..10}; do
+            if curl -f http://localhost:8080; then
+              echo "Frontend is accessible!"
+              break
+            fi
+            echo "Attempt $i failed, retrying in 3 seconds..."
+            sleep 3
+            if [ $i -eq 10 ]; then
+              echo "Frontend test failed after 10 attempts"
+              docker compose logs streamcaster-frontend
+              exit 1
+            fi
+          done
+
+          # Test backend health
+          echo "Testing backend health..."
+          for i in {1..10}; do
+            if curl -f http://localhost:3000/api/health; then
+              echo "Backend health check passed!"
+              break
+            fi
+            echo "Attempt $i failed, retrying in 3 seconds..."
+            sleep 3
+            if [ $i -eq 10 ]; then
+              echo "Backend health check failed after 10 attempts"
+              docker compose logs streamcaster-backend
+              exit 1
+            fi
+          done
+
+          echo "All tests passed!"
+          docker compose down
 
   security-scan:
     name: Security Scan
@@ -164,36 +227,36 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Run Trivy vulnerability scanner on backend
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: './backend'
-        format: 'sarif'
-        output: 'trivy-backend.sarif'
-    
-    - name: Run Trivy vulnerability scanner on frontend
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: './frontend'
-        format: 'sarif'
-        output: 'trivy-frontend.sarif'
-    
-    - name: Upload Backend Trivy scan results to GitHub Security
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-backend.sarif'
-        category: 'trivy-backend'
-    
-    - name: Upload Frontend Trivy scan results to GitHub Security
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-frontend.sarif'
-        category: 'trivy-frontend'
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner on backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './backend'
+          format: 'sarif'
+          output: 'trivy-backend.sarif'
+
+      - name: Run Trivy vulnerability scanner on frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './frontend'
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+
+      - name: Upload Backend Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-backend.sarif'
+          category: 'trivy-backend'
+
+      - name: Upload Frontend Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-frontend.sarif'
+          category: 'trivy-frontend'

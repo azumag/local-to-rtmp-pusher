@@ -40,11 +40,11 @@ function HomePage() {
     <Box sx={{ flexGrow: 1 }}>
       <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Local to RTMP Pusher
+          StreamCaster
         </Typography>
         <Typography variant="body1" paragraph>
-          ローカルまたはGoogleドライブの動画ファイルをRTMP/SRTでストリーミング配信するシステムへようこそ。
-          このアプリケーションを使用すると、FFmpegを使用して動画ファイルをRTMPサーバーにプッシュできます。
+          Professional streaming platform for broadcasting video files from local storage or Google Drive to RTMP/SRT endpoints.
+          StreamCaster empowers content creators with high-quality streaming capabilities using advanced FFmpeg technology.
         </Typography>
       </Paper>
 
