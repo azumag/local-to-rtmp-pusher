@@ -152,7 +152,8 @@ jobs:
           docker compose version
           docker compose config
           docker compose build
-          docker compose up -d
+          # Set CI mode for RTMP server to avoid backend dependency
+          CI_MODE=true docker compose up -d
 
           # Wait for services to be ready
           echo "Waiting for services to be ready..."
