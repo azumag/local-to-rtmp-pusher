@@ -7,10 +7,11 @@ A professional web-based media streaming platform that allows you to stream vide
 - 📹 Stream local video files to RTMP/SRT endpoints
 - 🌐 Stream from Google Drive shared folders
 - 🎛️ Configurable video/audio codecs and quality settings
-- 🖥️ Web-based user interface
+- 🖥️ Modern responsive web interface with horizontal navigation
 - 🐳 Fully containerized with Docker
 - 📊 Real-time stream status monitoring
 - 🚀 Built-in RTMP server for testing
+- 🔥 Hot-reloading development environment
 
 ## Architecture
 
@@ -68,30 +69,53 @@ docker-compose up -d
 
 3. Access the web interface:
 
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:8080
+- Backend API: http://localhost:3001
 - RTMP Server: rtmp://localhost:1935/live
 
 ## Development Setup
 
-### Using VS Code Dev Container (Recommended)
+### Quick Development Start (Recommended)
 
-1. Install the [Remote - Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension
-2. Open the project in VS Code
-3. Click "Reopen in Container" when prompted
-4. The development environment will be automatically configured
+The easiest way to start developing is using the included development environment with hot-reloading:
 
-### Manual Setup
+```bash
+# Start development environment with hot-reloading
+make dev
+
+# Or manually:
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+This will start:
+
+- Frontend with hot-reloading: http://localhost:8080
+- Backend API: http://localhost:3001
+- RTMP Server: rtmp://localhost:1935/live
+
+### Available Make Commands
+
+```bash
+make dev          # Start development environment
+make dev-build    # Build development containers
+make prod         # Start production environment
+make down         # Stop all containers
+make logs         # View all container logs
+make restart      # Restart all containers
+```
+
+### Manual Development Setup
+
+For local development without Docker:
 
 1. Install dependencies:
 
 ```bash
 # Backend
-cd backend
-npm install
+cd backend && npm install
 
 # Frontend
-cd ../frontend
-npm install
+cd frontend && npm install
 ```
 
 2. Start development servers:
@@ -108,11 +132,28 @@ npm start
 
 ### Environment Variables
 
-Create a `.env` file in the backend directory:
+Environment variables are automatically configured for development and production:
+
+**Development** (`frontend/.env.development`):
+
+```env
+REACT_APP_API_URL=http://localhost:3001
+GENERATE_SOURCEMAP=true
+CHOKIDAR_USEPOLLING=true
+```
+
+**Production** (`frontend/.env.production`):
+
+```env
+REACT_APP_API_URL=/api
+GENERATE_SOURCEMAP=false
+```
+
+**Backend** (create `.env` in backend directory):
 
 ```env
 NODE_ENV=development
-PORT=5000
+PORT=3000
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 ```
@@ -153,26 +194,36 @@ Default stream settings can be configured in the web interface:
 
 ```
 /
-├── backend/                  # Express.js API server
+├── backend/                    # Express.js API server
 │   ├── src/
-│   │   ├── routes/          # API endpoints
-│   │   ├── services/        # Business logic
-│   │   └── utils/           # Utility functions
+│   │   ├── routes/            # API endpoints
+│   │   ├── services/          # Business logic
+│   │   └── utils/             # Utility functions
 │   └── Dockerfile
 │
-├── frontend/                # React application
+├── frontend/                  # React application
 │   ├── src/
-│   │   ├── pages/          # Page components
-│   │   ├── services/       # API client services
+│   │   ├── pages/            # Page components
+│   │   ├── services/         # API client services
+│   │   ├── components/       # UI components
 │   │   └── App.js
-│   └── Dockerfile
+│   ├── Dockerfile            # Production build
+│   ├── Dockerfile.dev        # Development with hot-reload
+│   ├── .env.development      # Development environment
+│   └── .env.production       # Production environment
 │
-├── rtmp-server/            # Nginx RTMP server
+├── rtmp-server/              # Nginx RTMP server
 │   ├── config/
 │   └── Dockerfile
 │
-├── .devcontainer/          # VS Code Dev Container config
-└── docker-compose.yml      # Docker Compose configuration
+├── docs/                     # Documentation
+│   ├── development-setup.md  # Development guide
+│   └── planning/             # Design documents
+│
+├── scripts/                  # Utility scripts
+├── Makefile                  # Development commands
+├── docker-compose.yml        # Production configuration
+└── docker-compose.dev.yml    # Development configuration
 ```
 
 ## Testing
@@ -180,20 +231,30 @@ Default stream settings can be configured in the web interface:
 ### Running Tests
 
 ```bash
-# Backend tests
-cd backend
-npm test
+# Run all tests (backend + frontend)
+make test
 
-# Frontend tests
-cd frontend
-npm test
+# Backend tests only
+cd backend && npm test
+
+# Frontend tests only
+cd frontend && npm test
+
+# With coverage
+npm run test:coverage
 ```
 
-### Test Coverage
+### Linting and Formatting
 
 ```bash
-# Generate coverage report
-npm run test:coverage
+# Run linter
+make lint
+
+# Fix linting issues
+make lint-fix
+
+# Format code
+make format
 ```
 
 ## CI/CD
@@ -226,19 +287,36 @@ This project uses GitHub Actions for continuous integration and deployment:
 1. **Port already in use**
 
    ```bash
-   # Change ports in docker-compose.yml or stop conflicting services
-   docker-compose down
-   docker-compose up -d
+   # Stop containers and restart
+   make down
+   make dev  # or make prod
    ```
 
-2. **FFmpeg not found**
+2. **Hot reloading not working in development**
 
    ```bash
-   # Rebuild containers
-   docker-compose build --no-cache
+   # Restart development environment
+   make restart-frontend
+   # or rebuild completely
+   make dev-build && make dev
    ```
 
-3. **Google Drive authentication fails**
+3. **White screen in browser**
+
+   ```bash
+   # Check container logs
+   make logs-frontend
+   # Restart frontend container
+   docker-compose -f docker-compose.dev.yml restart streamcaster-frontend-dev
+   ```
+
+4. **API calls failing**
+
+   - Check that backend is running on correct port (3001)
+   - Verify environment variables are loaded correctly
+   - Check container logs: `make logs-backend`
+
+5. **Google Drive authentication fails**
    - Ensure correct OAuth credentials in `.env`
    - Check if the shared folder URL is valid
 
@@ -248,11 +326,24 @@ View container logs:
 
 ```bash
 # All containers
-docker-compose logs -f
+make logs
 
 # Specific container
-docker-compose logs -f backend
+make logs-frontend  # or logs-backend, logs-rtmp
+docker logs streamcaster-frontend-dev -f  # Development
+docker logs streamcaster-backend -f       # Backend
 ```
+
+### Development vs Production
+
+| Feature            | Development             | Production   |
+| ------------------ | ----------------------- | ------------ |
+| Frontend Server    | React Dev Server (8080) | Nginx (8080) |
+| Hot Reloading      | ✅ Enabled              | ❌ Disabled  |
+| Source Maps        | ✅ Enabled              | ❌ Disabled  |
+| Build Optimization | ❌ Disabled             | ✅ Enabled   |
+| Debug Info         | ✅ Visible              | ❌ Hidden    |
+| File Watching      | ✅ Polling              | N/A          |
 
 ## Security Considerations
 
