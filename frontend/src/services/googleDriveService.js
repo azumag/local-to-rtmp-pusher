@@ -1,4 +1,4 @@
-import apiClient from './apiClient';
+import apiClient, { createGoogleDriveRequest } from './apiClient';
 
 /**
  * Google Drive共有URLからファイル一覧を取得
@@ -42,7 +42,11 @@ export const getDownloadStatus = (fileId) => {
  * @returns {Promise} APIレスポンス
  */
 export const streamFile = (streamData) => {
-  return apiClient.post('/google-drive/stream', streamData);
+  return createGoogleDriveRequest({
+    method: 'post',
+    url: '/google-drive/stream',
+    data: streamData
+  });
 };
 
 /**

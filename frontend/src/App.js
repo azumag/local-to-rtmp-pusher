@@ -27,6 +27,9 @@ import GoogleDrivePage from './pages/GoogleDrivePage';
 import StreamsPage from './pages/StreamsPage';
 import SettingsPage from './pages/SettingsPage';
 
+// コンポーネントのインポート
+import StreamStatusIndicator from './components/StreamStatusIndicator';
+
 // テーマの設定
 const theme = createTheme({
   palette: {
@@ -182,6 +185,9 @@ function MainNavigation() {
             </Routes>
           </Container>
         </Box>
+
+        {/* ストリーミング状態インジケータ */}
+        <StreamStatusIndicator />
       </Box>
   );
 }
