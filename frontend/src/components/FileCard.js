@@ -16,17 +16,20 @@ import {
   Delete as DeleteIcon,
   CloudDownload as DownloadIcon,
   Videocam as VideocamIcon,
-  Folder as FolderIcon
+  Folder as FolderIcon,
+  FlashOn as FlashOnIcon
 } from '@mui/icons-material';
 
 const FileCard = ({
   file,
   onStream,
+  onQuickStream,
   onDelete,
   onDownload,
   isStreaming = false,
   showDownload = false,
   showDelete = true,
+  showQuickStream = false,
   cardType = 'local', // 'local' or 'gdrive'
   apiBaseUrl = process.env.REACT_APP_API_URL || '/api'
 }) => {
@@ -148,25 +151,40 @@ const FileCard = ({
       </CardContent>
       
       <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
-        <Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {!isFolder && (
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={<PlayIcon />}
-              onClick={() => onStream(file)}
-              disabled={isStreaming}
-            >
-              Stream
-            </Button>
+            <>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<PlayIcon />}
+                onClick={() => onStream(file)}
+                disabled={isStreaming}
+              >
+                ストリーム
+              </Button>
+              
+              {showQuickStream && onQuickStream && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<FlashOnIcon />}
+                  onClick={() => onQuickStream(file)}
+                  disabled={isStreaming}
+                  sx={{ minWidth: 'auto' }}
+                >
+                  クイック
+                </Button>
+              )}
+            </>
           )}
           
           {showDownload && !isFolder && (
-            <Tooltip title="Download file">
+            <Tooltip title="ダウンロード">
               <IconButton
                 size="small"
                 onClick={() => onDownload(file)}
-                sx={{ ml: 1 }}
               >
                 <DownloadIcon />
               </IconButton>
@@ -175,7 +193,7 @@ const FileCard = ({
         </Box>
         
         {showDelete && onDelete && (
-          <Tooltip title="Delete file">
+          <Tooltip title="削除">
             <IconButton
               size="small"
               color="error"

@@ -13,12 +13,40 @@ const activeStreams = {};
 // RTMPサーバーURL（デフォルト）
 const defaultRtmpServer = process.env.RTMP_SERVER || 'rtmp://rtmp-server:1935/live';
 
+// RTMPセッション情報の保存先
+const RTMP_SESSIONS_DB_PATH = path.join(getCacheDir(), 'rtmp-sessions.json');
+
+// アトミックなJSON書き込み用のユーティリティ
+const writeJSONSafely = async (filePath, data) => {
+  const tempPath = `${filePath}.tmp`;
+  try {
+    await fs.writeJSON(tempPath, data);
+    await fs.move(tempPath, filePath, { overwrite: true });
+  } catch (error) {
+    // テンポラリファイルをクリーンアップ
+    try {
+      await fs.remove(tempPath);
+    } catch (cleanupError) {
+      // クリーンアップエラーは無視
+    }
+    throw error;
+  }
+};
+
 // ストリームDBの初期化
 const initializeStreamDb = async () => {
-  if (!(await fileExists(STREAMS_DB_PATH))) {
-    await fs.writeJSON(STREAMS_DB_PATH, { streams: [] });
+  try {
+    if (!(await fileExists(STREAMS_DB_PATH))) {
+      await fs.writeJSON(STREAMS_DB_PATH, { streams: [] });
+    }
+    return await fs.readJSON(STREAMS_DB_PATH);
+  } catch (error) {
+    console.warn(`Failed to read streams.json, recreating: ${error.message}`);
+    // JSONファイルが壊れている場合は新しく作成
+    const defaultDb = { streams: [] };
+    await writeJSONSafely(STREAMS_DB_PATH, defaultDb);
+    return defaultDb;
   }
-  return fs.readJSON(STREAMS_DB_PATH);
 };
 
 /**
@@ -67,7 +95,7 @@ const saveStreamInfo = async (streamData) => {
       existingStream = newStream;
     }
 
-    await fs.writeJSON(STREAMS_DB_PATH, db);
+    await writeJSONSafely(STREAMS_DB_PATH, db);
     return existingStream;
   } catch (error) {
     console.error(`Error saving stream info: ${error.message}`);
@@ -138,6 +166,72 @@ const getRtmpServerInfo = async () => {
 };
 
 /**
+ * 既存のストリームを終了する
+ * @param {string} streamIdentifier - ストリームキーまたは出力URL
+ * @returns {Promise<boolean>} 終了が成功したかどうか
+ */
+const terminateExistingStreams = async (streamIdentifier) => {
+  try {
+    console.log(`Terminating existing streams for identifier: ${streamIdentifier}`);
+
+    // アクティブなストリームの中から該当するものを探して終了
+    let terminatedCount = 0;
+
+    for (const [streamId, streamInfo] of Object.entries(activeStreams)) {
+      try {
+        const streamRecord = await getStreamInfo(streamId);
+        if (
+          streamRecord &&
+          (streamRecord.streamKey === streamIdentifier ||
+            streamRecord.outputUrl === streamIdentifier ||
+            streamRecord.outputUrl?.includes(streamIdentifier) ||
+            (streamIdentifier.includes('live') && streamRecord.outputUrl?.includes('live')))
+        ) {
+          console.log(`Terminating stream ${streamId} for identifier ${streamIdentifier}`);
+
+          // FFmpegプロセスを強制終了
+          if (streamInfo.command) {
+            streamInfo.command.kill('SIGKILL');
+          }
+
+          // ログストリームを終了
+          if (streamInfo.logStream) {
+            streamInfo.logStream.end();
+          }
+
+          // ストリーム情報を更新（エラーを無視して続行）
+          try {
+            await saveStreamInfo({
+              id: streamId,
+              status: 'terminated',
+              endedAt: new Date().toISOString(),
+              terminationReason: `Terminated for new stream with identifier: ${streamIdentifier}`,
+            });
+          } catch (saveError) {
+            console.error(`Error saving termination info for ${streamId}:`, saveError.message);
+            // エラーを無視して続行
+          }
+
+          // アクティブストリームから削除
+          delete activeStreams[streamId];
+          terminatedCount += 1;
+        }
+      } catch (error) {
+        console.error(`Error terminating stream ${streamId}:`, error);
+      }
+    }
+
+    console.log(
+      `Terminated ${terminatedCount} existing streams for identifier: ${streamIdentifier}`
+    );
+    return true;
+  } catch (error) {
+    console.error(`Error terminating existing streams: ${error.message}`);
+    return false;
+  }
+};
+
+/**
  * ストリームの開始
  * @param {Object} streamData - ストリーム設定
  * @returns {Promise<Object>} ストリーム情報
@@ -157,15 +251,34 @@ const startStream = async (streamData) => {
 
     console.log('streamData:', streamData); // 追加するログ
 
-    const { fileId, rtmpUrl, streamKey, format, videoSettings, audioSettings, isGoogleDriveFile } =
-      streamData;
+    const {
+      fileId,
+      rtmpUrl,
+      streamKey,
+      format,
+      videoSettings,
+      audioSettings,
+      isGoogleDriveFile,
+      input,
+    } = streamData;
 
     // ファイル情報を取得
     let fileInfo = null;
     let inputPath = null;
 
     console.log('isGoogleDriveFile:', isGoogleDriveFile); // 追加するログ
-    if (isGoogleDriveFile) {
+    console.log('input parameter:', input); // 追加するログ
+
+    if (isGoogleDriveFile && input) {
+      // Google Driveファイルで既にダウンロード済みの場合
+      inputPath = input;
+      fileInfo = {
+        originalName: `gdrive-${fileId}`,
+        type: 'video',
+        size: 0,
+      };
+      console.log('Using pre-downloaded Google Drive file:', inputPath);
+    } else if (isGoogleDriveFile) {
       // Google Driveファイルの場合は別のサービスで処理
       const googleDriveService = require('./googleDriveService');
       const downloadInfo = await googleDriveService.downloadFile(fileId);
@@ -209,6 +322,16 @@ const startStream = async (streamData) => {
 
     // 出力URLのフォーマットをログに出力（デバッグ用）
     console.log('生成された出力URL:', outputUrl);
+
+    // 既存の同じストリームの接続があれば事前に終了
+    // streamKeyが空の場合は、outputUrlを使って識別
+    const streamIdentifier = streamKey || outputUrl;
+    console.log(`Checking for existing streams with identifier: ${streamIdentifier}`);
+    await terminateExistingStreams(streamIdentifier);
+    // 少し待機して既存接続の終了を確実にする
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1000);
+    });
 
     // ストリームIDの生成
     const streamId = generateUniqueId();
@@ -290,6 +413,19 @@ const startStream = async (streamData) => {
           command = command.format('mpegts');
         } else {
           command = command.format('flv');
+        }
+
+        // RTMP接続の改善オプションを追加
+        if (format === 'rtmp') {
+          command = command
+            .addOption('-f', 'flv')
+            .addOption('-flvflags', 'no_duration_filesize')
+            .addOption('-reconnect', '1')
+            .addOption('-reconnect_streamed', '1')
+            .addOption('-reconnect_delay_max', '2')
+            .addOption('-rtmp_live', 'live')
+            .addOption('-rtmp_buffer', '1000')
+            .addOption('-rtmp_flush_interval', '10');
         }
 
         // 出力URLの検証を追加
@@ -457,6 +593,144 @@ const stopStream = async (streamId) => {
   }
 };
 
+// RTMPセッションDBの初期化
+const initializeRtmpSessionDb = async () => {
+  try {
+    if (!(await fileExists(RTMP_SESSIONS_DB_PATH))) {
+      await writeJSONSafely(RTMP_SESSIONS_DB_PATH, { sessions: [] });
+    }
+    return await fs.readJSON(RTMP_SESSIONS_DB_PATH);
+  } catch (error) {
+    console.warn(`Failed to read rtmp-sessions.json, recreating: ${error.message}`);
+    // JSONファイルが壊れている場合は新しく作成
+    const defaultDb = { sessions: [] };
+    await writeJSONSafely(RTMP_SESSIONS_DB_PATH, defaultDb);
+    return defaultDb;
+  }
+};
+
+/**
+ * RTMPセッション情報の記録
+ * @param {Object} sessionData - セッション情報
+ * @returns {Promise<Object>} 保存されたセッション情報
+ */
+const recordRtmpSession = async (sessionData) => {
+  try {
+    const db = await initializeRtmpSessionDb();
+
+    const sessionRecord = {
+      id: generateUniqueId(),
+      ...sessionData,
+      timestamp: sessionData.timestamp || new Date().toISOString(),
+    };
+
+    db.sessions.push(sessionRecord);
+
+    // 古いセッション記録を削除（最新の100件のみ保持）
+    if (db.sessions.length > 100) {
+      db.sessions = db.sessions.slice(-100);
+    }
+
+    await writeJSONSafely(RTMP_SESSIONS_DB_PATH, db);
+    console.log('RTMP session recorded:', sessionRecord);
+
+    return sessionRecord;
+  } catch (error) {
+    console.error(`Error recording RTMP session: ${error.message}`);
+    // エラーが発生してもRTMPサーバーの動作を妨げないようにする
+    return null;
+  }
+};
+
+/**
+ * RTMPセッション一覧の取得
+ * @returns {Promise<Array>} セッション一覧
+ */
+const getRtmpSessions = async () => {
+  try {
+    const db = await initializeRtmpSessionDb();
+    return db.sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  } catch (error) {
+    console.error(`Error getting RTMP sessions: ${error.message}`);
+    return [];
+  }
+};
+
+/**
+ * 古いストリームのみを終了する（新しく開始されたストリームを保護）
+ * @param {string} streamIdentifier - ストリームキーまたは出力URL
+ * @param {number} minAgeMs - 終了対象とする最小経過時間（ミリ秒）
+ * @returns {Promise<boolean>} 終了が成功したかどうか
+ */
+const terminateOldStreams = async (streamIdentifier, minAgeMs = 5000) => {
+  try {
+    console.log(`Terminating old streams (>${minAgeMs}ms) for identifier: ${streamIdentifier}`);
+
+    // アクティブなストリームの中から該当するものを探して終了
+    let terminatedCount = 0;
+    const now = Date.now();
+
+    for (const [streamId, streamInfo] of Object.entries(activeStreams)) {
+      try {
+        const streamRecord = await getStreamInfo(streamId);
+        if (
+          streamRecord &&
+          (streamRecord.streamKey === streamIdentifier ||
+            streamRecord.outputUrl === streamIdentifier ||
+            streamRecord.outputUrl?.includes(streamIdentifier) ||
+            (streamIdentifier.includes('live') && streamRecord.outputUrl?.includes('live')))
+        ) {
+          // ストリームの開始時間をチェック
+          const startTime = new Date(streamRecord.startedAt).getTime();
+          const age = now - startTime;
+
+          if (age >= minAgeMs) {
+            console.log(
+              `Terminating old stream ${streamId} (age: ${age}ms) for identifier ${streamIdentifier}`
+            );
+
+            // FFmpegプロセスを強制終了
+            if (streamInfo.command) {
+              streamInfo.command.kill('SIGKILL');
+            }
+
+            // ログストリームを終了
+            if (streamInfo.logStream) {
+              streamInfo.logStream.end();
+            }
+
+            // ストリーム情報を更新（エラーを無視して続行）
+            try {
+              await saveStreamInfo({
+                id: streamId,
+                status: 'terminated',
+                endedAt: new Date().toISOString(),
+                terminationReason: `Terminated old stream (age: ${age}ms) for new stream with identifier: ${streamIdentifier}`,
+              });
+            } catch (saveError) {
+              console.error(`Error saving termination info for ${streamId}:`, saveError.message);
+            }
+
+            // アクティブストリームから削除
+            delete activeStreams[streamId];
+            terminatedCount += 1;
+          } else {
+            console.log(`Skipping recent stream ${streamId} (age: ${age}ms, min: ${minAgeMs}ms)`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error checking stream ${streamId}:`, error);
+      }
+    }
+
+    console.log(`Terminated ${terminatedCount} old streams for identifier: ${streamIdentifier}`);
+    return true;
+  } catch (error) {
+    console.error(`Error terminating old streams: ${error.message}`);
+    return false;
+  }
+};
+
 module.exports = {
   listActiveStreams,
   getStreamInfo,
@@ -464,4 +738,8 @@ module.exports = {
   getRtmpServerInfo,
   startStream,
   stopStream,
+  recordRtmpSession,
+  getRtmpSessions,
+  terminateExistingStreams,
+  terminateOldStreams,
 };
