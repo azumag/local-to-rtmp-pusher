@@ -1,92 +1,260 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Card, CardContent, CardActions, Button, Grid, Paper } from '@mui/material';
-import VideoFileIcon from '@mui/icons-material/VideoFile';
-import CloudIcon from '@mui/icons-material/Cloud';
+import { 
+  Box, 
+  Typography, 
+  Card, 
+  CardContent, 
+  Button, 
+  Grid, 
+  Paper,
+  Chip,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Alert,
+  CircularProgress
+} from '@mui/material';
 import StreamIcon from '@mui/icons-material/Stream';
-import SettingsIcon from '@mui/icons-material/Settings';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopIcon from '@mui/icons-material/Stop';
+import CloudDoneIcon from '@mui/icons-material/CloudDone';
+import CloudOffIcon from '@mui/icons-material/CloudOff';
+import FolderIcon from '@mui/icons-material/Folder';
+import { listFiles, deleteFile } from '../services/fileService';
+import useStreaming from '../hooks/useStreaming';
 
 function HomePage() {
   const navigate = useNavigate();
+  const { activeStreams, isLoading: streamsLoading } = useStreaming();
+  const [files, setFiles] = useState([]);
+  const [filesLoading, setFilesLoading] = useState(true);
+  const [googleDriveStatus, setGoogleDriveStatus] = useState({ connected: false, accountInfo: null });
 
-  const menuItems = [
-    {
-      title: 'ローカルファイル',
-      description: 'ローカルに保存された動画ファイルをアップロードしてRTMP/SRTでストリーミングします。',
-      icon: <VideoFileIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      path: '/local-files',
-    },
-    {
-      title: 'Googleドライブ',
-      description: 'Googleドライブの共有フォルダから動画ファイルを選択してストリーミングします。',
-      icon: <CloudIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      path: '/google-drive',
-    },
-    {
-      title: 'ストリーム管理',
-      description: '現在のストリームを管理して、進行状況やステータスを確認します。',
-      icon: <StreamIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      path: '/streams',
-    },
-    {
-      title: '設定',
-      description: 'RTMPサーバーの設定やストリーミングのデフォルト設定を構成します。',
-      icon: <SettingsIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      path: '/settings',
-    },
-  ];
+  useEffect(() => {
+    fetchFiles();
+    checkGoogleDriveStatus();
+  }, []);
+
+  const fetchFiles = async () => {
+    try {
+      const response = await listFiles();
+      setFiles(response.data.slice(0, 5)); // 最新5件のみ表示
+    } catch (error) {
+      console.error('Failed to fetch files:', error);
+    } finally {
+      setFilesLoading(false);
+    }
+  };
+
+  const checkGoogleDriveStatus = () => {
+    // 実際のGoogle Drive接続状態をチェックするロジックを実装
+    // 今回は仮の状態を設定
+    setGoogleDriveStatus({
+      connected: false,
+      accountInfo: null,
+      lastSync: null
+    });
+  };
+
+  const handleDeleteFile = async (fileId) => {
+    try {
+      await deleteFile(fileId);
+      await fetchFiles(); // ファイル一覧を再取得
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString('ja-JP');
+  };
 
   return (
     <Box sx={{ flexGrow: 1 }}>
+      {/* ヘッダーセクション */}
       <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          StreamCaster
+          StreamCaster ダッシュボード
         </Typography>
-        <Typography variant="body1" paragraph>
-          Professional streaming platform for broadcasting video files from local storage or Google Drive to RTMP/SRT endpoints.
-          StreamCaster empowers content creators with high-quality streaming capabilities using advanced FFmpeg technology.
+        <Typography variant="body1">
+          ストリーミング状況、ファイル、接続状態を一目で確認できます。
         </Typography>
       </Paper>
 
       <Grid container spacing={3}>
-        {menuItems.map((item) => (
-          <Grid item xs={12} md={6} key={item.title}>
-            <Card 
-              sx={{ 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-5px)',
-                  boxShadow: 6,
-                },
-              }}
-            >
-              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                <Box sx={{ p: 2 }}>
-                  {item.icon}
+        {/* ストリーム状況セクション */}
+        <Grid item xs={12} lg={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <StreamIcon sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h6" component="h2">
+                  ストリーム状況
+                </Typography>
+              </Box>
+              
+              {streamsLoading ? (
+                <CircularProgress />
+              ) : (
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <Chip 
+                      label={activeStreams.length > 0 ? '配信中' : '停止中'}
+                      color={activeStreams.length > 0 ? 'success' : 'default'}
+                      icon={activeStreams.length > 0 ? <PlayArrowIcon /> : <StopIcon />}
+                      sx={{ mr: 2 }}
+                    />
+                    <Typography variant="body2">
+                      アクティブなストリーム: {activeStreams.length}件
+                    </Typography>
+                  </Box>
+                  
+                  {activeStreams.length > 0 && (
+                    <List dense>
+                      {activeStreams.slice(0, 3).map((stream, index) => (
+                        <ListItem key={index}>
+                          <ListItemText 
+                            primary={stream.fileName || `ストリーム ${index + 1}`}
+                            secondary={`${stream.rtmpUrl || 'N/A'}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                  
+                  <Box sx={{ mt: 2 }}>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => navigate('/streams')}
+                      fullWidth
+                    >
+                      ストリーム管理を開く
+                    </Button>
+                  </Box>
                 </Box>
-                <Typography gutterBottom variant="h5" component="h2">
-                  {item.title}
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Google Drive接続状態セクション */}
+        <Grid item xs={12} lg={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                {googleDriveStatus.connected ? (
+                  <CloudDoneIcon sx={{ mr: 1, color: 'success.main' }} />
+                ) : (
+                  <CloudOffIcon sx={{ mr: 1, color: 'error.main' }} />
+                )}
+                <Typography variant="h6" component="h2">
+                  Google Drive
                 </Typography>
-                <Typography>
-                  {item.description}
+              </Box>
+              
+              {googleDriveStatus.connected ? (
+                <Box>
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    接続済み
+                  </Alert>
+                  {googleDriveStatus.accountInfo && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      アカウント: {googleDriveStatus.accountInfo.email}
+                    </Typography>
+                  )}
+                  {googleDriveStatus.lastSync && (
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      最終同期: {formatDate(googleDriveStatus.lastSync)}
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  未接続
+                </Alert>
+              )}
+              
+              <Button 
+                variant="outlined" 
+                onClick={() => navigate('/google-drive')}
+                fullWidth
+              >
+                Google Driveを管理
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* アップロード済みファイルセクション */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <FolderIcon sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h6" component="h2">
+                  最近のファイル
                 </Typography>
-              </CardContent>
-              <CardActions>
+              </Box>
+              
+              {filesLoading ? (
+                <CircularProgress />
+              ) : files.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  アップロードされたファイルがありません
+                </Typography>
+              ) : (
+                <List>
+                  {files.map((file) => (
+                    <ListItem key={file.id}>
+                      <ListItemText 
+                        primary={file.originalName}
+                        secondary={`${formatFileSize(file.size)} • ${formatDate(file.uploadedAt)}`}
+                      />
+                      <ListItemSecondaryAction>
+                        <IconButton 
+                          edge="end" 
+                          onClick={() => handleDeleteFile(file.id)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+              
+              <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
                 <Button 
-                  size="large" 
-                  fullWidth 
-                  variant="contained"
-                  onClick={() => navigate(item.path)}
+                  variant="outlined" 
+                  onClick={() => navigate('/local-files')}
+                  sx={{ flex: 1 }}
                 >
-                  {item.title}を開く
+                  すべてのファイルを見る
                 </Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
+                <Button 
+                  variant="contained" 
+                  onClick={() => navigate('/local-files')}
+                  sx={{ flex: 1 }}
+                >
+                  ファイルをアップロード
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
     </Box>
   );
