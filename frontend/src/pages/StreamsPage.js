@@ -1,9 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Grid, Card, CardContent, CardActions, Button, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Alert, LinearProgress, Snackbar } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Paper,
+  Grid,
+  Card,
+  CardContent,
+  CardActions,
+  Button,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
+  LinearProgress,
+  Snackbar,
+} from '@mui/material';
 import StopIcon from '@mui/icons-material/Stop';
 import InfoIcon from '@mui/icons-material/Info';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { listActiveStreams, getStreamInfo, getStreamStatus, stopStream } from '../services/streamService';
+import {
+  listActiveStreams,
+  getStreamInfo,
+  getStreamStatus,
+  stopStream,
+} from '../services/streamService';
 
 function StreamsPage() {
   const [streams, setStreams] = useState([]);
@@ -31,12 +54,12 @@ function StreamsPage() {
   // 初回ロード時にストリーム一覧を取得
   useEffect(() => {
     fetchStreams();
-    
+
     // 30秒ごとに更新
     const interval = setInterval(() => {
       fetchStreams();
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -58,12 +81,12 @@ function StreamsPage() {
 
     try {
       await stopStream(streamId);
-      
+
       // ストリーム一覧を更新
       fetchStreams();
-      
+
       showAlert('ストリームを停止しました', 'success');
-      
+
       // 詳細ダイアログが開いている場合は閉じる
       if (streamDetailsOpen && selectedStream && selectedStream.id === streamId) {
         setStreamDetailsOpen(false);
@@ -118,11 +141,11 @@ function StreamsPage() {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     return [
       hours.toString().padStart(2, '0'),
       minutes.toString().padStart(2, '0'),
-      secs.toString().padStart(2, '0')
+      secs.toString().padStart(2, '0'),
     ].join(':');
   };
 
@@ -132,7 +155,7 @@ function StreamsPage() {
         <Typography variant="h4" component="h1">
           ストリーム管理
         </Typography>
-        
+
         <Button
           variant="outlined"
           startIcon={<RefreshIcon />}
@@ -142,13 +165,13 @@ function StreamsPage() {
           更新
         </Button>
       </Box>
-      
+
       <Paper sx={{ p: 3, mb: 4 }}>
         <Typography variant="body1">
           現在アクティブなストリームの一覧と、その状態を確認できます。ストリームの詳細情報の確認や、ストリームの停止ができます。
         </Typography>
       </Paper>
-      
+
       {loading ? (
         <LinearProgress sx={{ mb: 2 }} />
       ) : (
@@ -156,9 +179,7 @@ function StreamsPage() {
           {streams.length === 0 ? (
             <Grid item xs={12}>
               <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body1">
-                  現在アクティブなストリームはありません。
-                </Typography>
+                <Typography variant="body1">現在アクティブなストリームはありません。</Typography>
               </Paper>
             </Grid>
           ) : (
@@ -166,7 +187,14 @@ function StreamsPage() {
               <Grid item xs={12} md={6} lg={4} key={stream.id}>
                 <Card>
                   <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
+                    >
                       <Typography variant="h6" component="div" noWrap title={stream.fileName}>
                         {stream.fileName}
                       </Typography>
@@ -176,15 +204,15 @@ function StreamsPage() {
                         size="small"
                       />
                     </Box>
-                    
+
                     <Typography variant="body2" color="text.secondary">
                       出力: {stream.rtmpUrl}/{stream.streamKey}
                     </Typography>
-                    
+
                     <Typography variant="body2" color="text.secondary">
                       開始: {new Date(stream.startedAt).toLocaleString()}
                     </Typography>
-                    
+
                     {stream.duration && (
                       <Typography variant="body2" color="text.secondary">
                         配信時間: {formatDuration(stream.duration)}
@@ -215,7 +243,7 @@ function StreamsPage() {
           )}
         </Grid>
       )}
-      
+
       {/* ストリーム詳細ダイアログ */}
       <Dialog
         open={streamDetailsOpen}
@@ -230,7 +258,7 @@ function StreamsPage() {
               <Typography variant="h6" gutterBottom>
                 {selectedStream.fileName}
               </Typography>
-              
+
               <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">ステータス</Typography>
@@ -240,49 +268,54 @@ function StreamsPage() {
                     size="small"
                   />
                 </Grid>
-                
+
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">配信時間</Typography>
                   <Typography variant="body2">
                     {selectedStream.duration ? formatDuration(selectedStream.duration) : 'N/A'}
                   </Typography>
                 </Grid>
-                
+
                 <Grid item xs={12}>
                   <Typography variant="subtitle2">出力URL</Typography>
                   <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                    {selectedStream.outputUrl || `${selectedStream.rtmpUrl}/${selectedStream.streamKey}`}
+                    {selectedStream.outputUrl ||
+                      `${selectedStream.rtmpUrl}/${selectedStream.streamKey}`}
                   </Typography>
                 </Grid>
-                
+
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">開始時間</Typography>
                   <Typography variant="body2">
-                    {selectedStream.startedAt ? new Date(selectedStream.startedAt).toLocaleString() : 'N/A'}
+                    {selectedStream.startedAt
+                      ? new Date(selectedStream.startedAt).toLocaleString()
+                      : 'N/A'}
                   </Typography>
                 </Grid>
-                
+
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">終了時間</Typography>
                   <Typography variant="body2">
-                    {selectedStream.endedAt ? new Date(selectedStream.endedAt).toLocaleString() : '進行中'}
+                    {selectedStream.endedAt
+                      ? new Date(selectedStream.endedAt).toLocaleString()
+                      : '進行中'}
                   </Typography>
                 </Grid>
-                
+
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">形式</Typography>
                   <Typography variant="body2" sx={{ textTransform: 'uppercase' }}>
                     {selectedStream.format || 'RTMP'}
                   </Typography>
                 </Grid>
-                
+
                 <Grid item xs={6}>
                   <Typography variant="subtitle2">ファイルID</Typography>
                   <Typography variant="body2" noWrap title={selectedStream.fileId}>
                     {selectedStream.fileId}
                   </Typography>
                 </Grid>
-                
+
                 {selectedStream.videoSettings && (
                   <Grid item xs={12}>
                     <Typography variant="subtitle2">動画設定</Typography>
@@ -290,27 +323,34 @@ function StreamsPage() {
                       <Grid container spacing={1}>
                         <Grid item xs={6}>
                           <Typography variant="caption">コーデック:</Typography>
-                          <Typography variant="body2">{selectedStream.videoSettings.codec}</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.videoSettings.codec}
+                          </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="caption">ビットレート:</Typography>
-                          <Typography variant="body2">{selectedStream.videoSettings.bitrate}</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.videoSettings.bitrate}
+                          </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="caption">フレームレート:</Typography>
-                          <Typography variant="body2">{selectedStream.videoSettings.framerate} fps</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.videoSettings.framerate} fps
+                          </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="caption">解像度:</Typography>
                           <Typography variant="body2">
-                            {selectedStream.videoSettings.width}x{selectedStream.videoSettings.height}
+                            {selectedStream.videoSettings.width}x
+                            {selectedStream.videoSettings.height}
                           </Typography>
                         </Grid>
                       </Grid>
                     </Paper>
                   </Grid>
                 )}
-                
+
                 {selectedStream.audioSettings && (
                   <Grid item xs={12}>
                     <Typography variant="subtitle2">音声設定</Typography>
@@ -318,30 +358,36 @@ function StreamsPage() {
                       <Grid container spacing={1}>
                         <Grid item xs={6}>
                           <Typography variant="caption">コーデック:</Typography>
-                          <Typography variant="body2">{selectedStream.audioSettings.codec}</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.audioSettings.codec}
+                          </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="caption">ビットレート:</Typography>
-                          <Typography variant="body2">{selectedStream.audioSettings.bitrate}</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.audioSettings.bitrate}
+                          </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="caption">サンプルレート:</Typography>
-                          <Typography variant="body2">{selectedStream.audioSettings.sampleRate} Hz</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.audioSettings.sampleRate} Hz
+                          </Typography>
                         </Grid>
                         <Grid item xs={6}>
                           <Typography variant="caption">チャンネル:</Typography>
-                          <Typography variant="body2">{selectedStream.audioSettings.channels}</Typography>
+                          <Typography variant="body2">
+                            {selectedStream.audioSettings.channels}
+                          </Typography>
                         </Grid>
                       </Grid>
                     </Paper>
                   </Grid>
                 )}
-                
+
                 {selectedStream.errorMessage && (
                   <Grid item xs={12}>
-                    <Alert severity="error">
-                      {selectedStream.errorMessage}
-                    </Alert>
+                    <Alert severity="error">{selectedStream.errorMessage}</Alert>
                   </Grid>
                 )}
               </Grid>
@@ -365,18 +411,10 @@ function StreamsPage() {
           )}
         </DialogActions>
       </Dialog>
-      
+
       {/* アラート */}
-      <Snackbar
-        open={alertOpen}
-        autoHideDuration={6000}
-        onClose={() => setAlertOpen(false)}
-      >
-        <Alert
-          onClose={() => setAlertOpen(false)}
-          severity={alertSeverity}
-          sx={{ width: '100%' }}
-        >
+      <Snackbar open={alertOpen} autoHideDuration={6000} onClose={() => setAlertOpen(false)}>
+        <Alert onClose={() => setAlertOpen(false)} severity={alertSeverity} sx={{ width: '100%' }}>
           {alertMessage}
         </Alert>
       </Snackbar>

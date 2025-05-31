@@ -19,7 +19,7 @@ if (rootElement) {
   if (process.env.NODE_ENV === 'development') {
     console.log('Creating React root...');
   }
-  
+
   root.render(
     <React.StrictMode>
       <BrowserRouter>
@@ -27,7 +27,7 @@ if (rootElement) {
       </BrowserRouter>
     </React.StrictMode>
   );
-  
+
   console.log('React app rendered');
 } else {
   console.error('Root element not found!');

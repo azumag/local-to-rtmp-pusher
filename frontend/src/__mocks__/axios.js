@@ -8,7 +8,7 @@ export default {
   }),
   defaults: {
     headers: {
-      common: {}
-    }
-  }
+      common: {},
+    },
+  },
 };

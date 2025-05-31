@@ -9,7 +9,7 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  CardMedia
+  CardMedia,
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -17,7 +17,8 @@ import {
   CloudDownload as DownloadIcon,
   Videocam as VideocamIcon,
   Folder as FolderIcon,
-  FlashOn as FlashOnIcon
+  FlashOn as FlashOnIcon,
+  SendToMobile as SendToStreamIcon,
 } from '@mui/icons-material';
 
 const FileCard = ({
@@ -26,12 +27,15 @@ const FileCard = ({
   onQuickStream,
   onDelete,
   onDownload,
+  onSendToStream,
   isStreaming = false,
   showDownload = false,
   showDelete = true,
   showQuickStream = false,
+  showSendToStream = false,
+  canSendToStream = false,
   cardType = 'local', // 'local' or 'gdrive'
-  apiBaseUrl = process.env.REACT_APP_API_URL || '/api'
+  apiBaseUrl = process.env.REACT_APP_API_URL || '/api',
 }) => {
   const formatFileSize = (bytes) => {
     if (!bytes) return 'Unknown';
@@ -54,9 +58,10 @@ const FileCard = ({
   };
 
   const isFolder = file.mimeType?.includes('folder');
-  const thumbnailUrl = cardType === 'local' && file.id && !isFolder 
-    ? `${apiBaseUrl}/files/${file.id}/thumbnail` 
-    : null;
+  const thumbnailUrl =
+    cardType === 'local' && file.id && !isFolder
+      ? `${apiBaseUrl}/files/${file.id}/thumbnail`
+      : null;
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -69,7 +74,7 @@ const FileCard = ({
           alt={file.name}
           sx={{
             objectFit: 'cover',
-            backgroundColor: '#f5f5f5'
+            backgroundColor: '#f5f5f5',
           }}
           onError={(e) => {
             // サムネイル読み込みエラー時はアイコン表示にフォールバック
@@ -78,32 +83,32 @@ const FileCard = ({
           }}
         />
       ) : null}
-      
+
       {/* フォールバック用のアイコン表示 */}
       {!thumbnailUrl && (
-        <Box 
-          sx={{ 
-            height: 140, 
-            display: 'flex', 
-            alignItems: 'center', 
+        <Box
+          sx={{
+            height: 140,
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#f5f5f5',
-            color: '#666'
+            color: '#666',
           }}
         >
           {getFileIcon()}
         </Box>
       )}
-      
+
       {/* サムネイル読み込み失敗時のフォールバック */}
-      <Box 
-        sx={{ 
-          height: 140, 
-          display: 'none', 
-          alignItems: 'center', 
+      <Box
+        sx={{
+          height: 140,
+          display: 'none',
+          alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: '#f5f5f5',
-          color: '#666'
+          color: '#666',
         }}
       >
         {getFileIcon()}
@@ -113,43 +118,38 @@ const FileCard = ({
         <Typography variant="h6" component="div" sx={{ mb: 1 }} noWrap>
           {file.name || file.originalName}
         </Typography>
-        
+
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {file.size && (
             <Typography variant="body2" color="text.secondary">
               Size: {formatFileSize(file.size)}
             </Typography>
           )}
-          
+
           {file.uploadDate && (
             <Typography variant="body2" color="text.secondary">
               Uploaded: {formatDate(file.uploadDate)}
             </Typography>
           )}
-          
+
           {file.modifiedTime && (
             <Typography variant="body2" color="text.secondary">
               Modified: {formatDate(file.modifiedTime)}
             </Typography>
           )}
-          
+
           {cardType === 'gdrive' && file.id && (
             <Typography variant="caption" color="text.secondary" noWrap>
               ID: {file.id}
             </Typography>
           )}
-          
+
           {isStreaming && (
-            <Chip 
-              label="Currently Streaming" 
-              color="success" 
-              size="small" 
-              sx={{ mt: 1 }}
-            />
+            <Chip label="Currently Streaming" color="success" size="small" sx={{ mt: 1 }} />
           )}
         </Box>
       </CardContent>
-      
+
       <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {!isFolder && (
@@ -163,7 +163,7 @@ const FileCard = ({
               >
                 ストリーム
               </Button>
-              
+
               {showQuickStream && onQuickStream && (
                 <Button
                   size="small"
@@ -177,21 +177,32 @@ const FileCard = ({
                   クイック
                 </Button>
               )}
+
+              {showSendToStream && onSendToStream && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<SendToStreamIcon />}
+                  onClick={() => onSendToStream(file)}
+                  disabled={!canSendToStream || isStreaming}
+                  title={!canSendToStream ? 'アクティブなセッションがありません' : ''}
+                >
+                  配信に送る
+                </Button>
+              )}
             </>
           )}
-          
+
           {showDownload && !isFolder && (
             <Tooltip title="ダウンロード">
-              <IconButton
-                size="small"
-                onClick={() => onDownload(file)}
-              >
+              <IconButton size="small" onClick={() => onDownload(file)}>
                 <DownloadIcon />
               </IconButton>
             </Tooltip>
           )}
         </Box>
-        
+
         {showDelete && onDelete && (
           <Tooltip title="削除">
             <IconButton
