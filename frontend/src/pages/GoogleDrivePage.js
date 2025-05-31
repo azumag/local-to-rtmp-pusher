@@ -156,15 +156,15 @@ function GoogleDrivePage() {
                   <CardMedia
                     component="img"
                     height="140"
-                    image="/video-thumbnail.png"
+                    image={`https://drive.google.com/thumbnail?id=${file.id}&sz=w320-h180-c`}
                     alt={file.name}
+                    onError={(e) => {
+                      e.target.src = "/video-thumbnail.png";
+                    }}
                   />
                   <CardContent>
                     <Typography variant="h6" component="div" noWrap title={file.name}>
                       {file.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      タイプ: {file.mimeType}
                     </Typography>
                   </CardContent>
                   <CardActions>
