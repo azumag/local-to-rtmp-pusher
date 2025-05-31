@@ -49,12 +49,14 @@ const fileRoutes = require('./routes/files');
 const streamRoutes = require('./routes/stream');
 const googleDriveRoutes = require('./routes/googleDrive');
 const rtmpRoutes = require('./routes/rtmp');
+const persistentStreamRoutes = require('./routes/persistentStream');
 
 // ルートの設定
 app.use('/api/files', fileRoutes);
 app.use('/api/stream', streamRoutes);
 app.use('/api/google-drive', googleDriveRoutes);
 app.use('/api/rtmp', rtmpRoutes);
+app.use('/api/stream', persistentStreamRoutes);
 
 // 基本的なヘルスチェックエンドポイント
 app.get('/api/health', (req, res) => {

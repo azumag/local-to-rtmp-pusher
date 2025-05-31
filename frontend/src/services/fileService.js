@@ -19,9 +19,7 @@ export const uploadFile = (formData, onProgress) => {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
-    onUploadProgress: onProgress
-      ? (progressEvent) => onProgress(progressEvent)
-      : undefined,
+    onUploadProgress: onProgress ? (progressEvent) => onProgress(progressEvent) : undefined,
   });
 };
 

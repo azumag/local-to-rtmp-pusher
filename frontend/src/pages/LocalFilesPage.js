@@ -1,11 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Button, Paper, Grid, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, LinearProgress } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Button,
+  Paper,
+  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  LinearProgress,
+} from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { styled } from '@mui/material/styles';
 
 // APIサービスのインポート
 import { uploadFile, listFiles, deleteFile } from '../services/fileService';
 import { startStream } from '../services/streamService';
+import { usePersistentStreaming } from '../hooks/usePersistentStreaming';
 import FileCard from '../components/FileCard';
 
 // localStorage keys
@@ -14,7 +31,7 @@ const STORAGE_KEYS = {
   STREAM_KEY: 'streamcaster_stream_key',
   STREAM_FORMAT: 'streamcaster_stream_format',
   VIDEO_SETTINGS: 'streamcaster_video_settings',
-  AUDIO_SETTINGS: 'streamcaster_audio_settings'
+  AUDIO_SETTINGS: 'streamcaster_audio_settings',
 };
 
 // localStorage helper functions
@@ -56,6 +73,14 @@ function LocalFilesPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [streamDialogOpen, setStreamDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+
+  // 永続ストリーミング機能
+  const {
+    currentSession,
+    canSwitchContent,
+    switchToFile,
+    isLoading: streamLoading,
+  } = usePersistentStreaming();
   const [rtmpUrl, setRtmpUrl] = useState('');
   const [streamKey, setStreamKey] = useState('');
   const [streamFormat, setStreamFormat] = useState('rtmp');
@@ -64,13 +89,13 @@ function LocalFilesPage() {
     bitrate: '2500k',
     framerate: 30,
     width: 1280,
-    height: 720
+    height: 720,
   });
   const [audioSettings, setAudioSettings] = useState({
     codec: 'aac',
     bitrate: '128k',
     sampleRate: 44100,
-    channels: 2
+    channels: 2,
   });
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
@@ -99,13 +124,13 @@ function LocalFilesPage() {
       bitrate: '2500k',
       framerate: 30,
       width: 1280,
-      height: 720
+      height: 720,
     });
     const savedAudioSettings = loadFromStorage(STORAGE_KEYS.AUDIO_SETTINGS, {
       codec: 'aac',
       bitrate: '128k',
       sampleRate: 44100,
-      channels: 2
+      channels: 2,
     });
 
     setRtmpUrl(savedRtmpUrl);
@@ -128,7 +153,7 @@ function LocalFilesPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       await uploadFile(formData, (progressEvent) => {
         const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         setUploadProgress(progress);
@@ -141,7 +166,9 @@ function LocalFilesPage() {
     } catch (error) {
       console.error('ファイルのアップロードに失敗しました', error);
       // エラーメッセージをユーザーに表示
-      alert(`エラー: ${error.response?.data?.error || error.message || 'ファイルのアップロードに失敗しました'}`);
+      alert(
+        `エラー: ${error.response?.data?.error || error.message || 'ファイルのアップロードに失敗しました'}`
+      );
     } finally {
       setUploading(false);
     }
@@ -179,29 +206,31 @@ function LocalFilesPage() {
         streamKey,
         format: streamFormat,
         videoSettings,
-        audioSettings
+        audioSettings,
       };
 
       console.log('ストリーム開始リクエストデータ:', streamData);
 
       const response = await startStream(streamData);
       console.log('ストリーミングを開始しました', response.data);
-      
+
       // 成功した場合に設定を保存
       saveToStorage(STORAGE_KEYS.RTMP_URL, rtmpUrl);
       saveToStorage(STORAGE_KEYS.STREAM_KEY, streamKey);
       saveToStorage(STORAGE_KEYS.STREAM_FORMAT, streamFormat);
       saveToStorage(STORAGE_KEYS.VIDEO_SETTINGS, videoSettings);
       saveToStorage(STORAGE_KEYS.AUDIO_SETTINGS, audioSettings);
-      
+
       // ダイアログを閉じる
       setStreamDialogOpen(false);
-      
+
       // ユーザーに通知
       alert(`ストリーミングを開始しました: ${selectedFile.originalName}`);
     } catch (error) {
       console.error('ストリーミングの開始に失敗しました', error);
-      alert(`エラー: ${error.response?.data?.error || error.message || 'ストリーミングの開始に失敗しました'}`);
+      alert(
+        `エラー: ${error.response?.data?.error || error.message || 'ストリーミングの開始に失敗しました'}`
+      );
     }
   };
 
@@ -220,17 +249,35 @@ function LocalFilesPage() {
         streamKey,
         format: streamFormat,
         videoSettings,
-        audioSettings
+        audioSettings,
       };
 
       const response = await startStream(streamData);
       console.log('クイックストリーミングを開始しました', response.data);
-      
+
       // ユーザーに通知
       alert(`クイックストリーミングを開始しました: ${file.originalName}`);
     } catch (error) {
       console.error('クイックストリーミングの開始に失敗しました', error);
-      alert(`エラー: ${error.response?.data?.error || error.message || 'クイックストリーミングの開始に失敗しました'}`);
+      alert(
+        `エラー: ${error.response?.data?.error || error.message || 'クイックストリーミングの開始に失敗しました'}`
+      );
+    }
+  };
+
+  // 永続ストリーミングセッションにファイルを送信
+  const handleSendToStream = async (file) => {
+    if (!currentSession) {
+      alert('アクティブなストリーミングセッションがありません');
+      return;
+    }
+
+    try {
+      await switchToFile(currentSession.id, file.id, false);
+      alert(`ファイルを配信に送信しました: ${file.originalName}`);
+    } catch (error) {
+      console.error('ファイル送信に失敗しました', error);
+      alert(`エラー: ${error.message || 'ファイル送信に失敗しました'}`);
     }
   };
 
@@ -248,12 +295,14 @@ function LocalFilesPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         ローカルファイル
       </Typography>
-      
-      <Paper sx={{ p: 3, mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
+      <Paper
+        sx={{ p: 3, mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+      >
         <Typography variant="body1">
           動画ファイルをアップロードしてRTMP/SRTで配信することができます。
         </Typography>
-        
+
         <Button
           component="label"
           variant="contained"
@@ -264,15 +313,15 @@ function LocalFilesPage() {
           <VisuallyHiddenInput type="file" accept="video/*" onChange={handleFileUpload} />
         </Button>
       </Paper>
-      
+
       {uploading && (
         <Paper sx={{ p: 2, mb: 4 }}>
           <Typography variant="body2" sx={{ mb: 1 }}>
             アップロード中... {uploadProgress}%
           </Typography>
-          <LinearProgress 
-            variant="determinate" 
-            value={uploadProgress} 
+          <LinearProgress
+            variant="determinate"
+            value={uploadProgress}
             sx={{ height: 10, borderRadius: 5 }}
           />
           <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
@@ -280,11 +329,11 @@ function LocalFilesPage() {
           </Typography>
         </Paper>
       )}
-      
+
       <Typography variant="h6" gutterBottom>
         アップロード済みファイル
       </Typography>
-      
+
       {loading ? (
         <LinearProgress />
       ) : (
@@ -296,29 +345,30 @@ function LocalFilesPage() {
                   file={{
                     ...file,
                     name: file.originalName,
-                    uploadDate: file.createdAt
+                    uploadDate: file.createdAt,
                   }}
                   onStream={() => handleOpenStreamDialog(file)}
                   onQuickStream={() => handleQuickStream(file)}
+                  onSendToStream={() => handleSendToStream(file)}
                   onDelete={() => handleDeleteFile(file.id)}
                   cardType="local"
                   showDelete={true}
                   showQuickStream={!!rtmpUrl}
+                  showSendToStream={true}
+                  canSendToStream={canSwitchContent}
                 />
               </Grid>
             ))
           ) : (
             <Grid item xs={12}>
               <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body1">
-                  まだファイルがアップロードされていません。
-                </Typography>
+                <Typography variant="body1">まだファイルがアップロードされていません。</Typography>
               </Paper>
             </Grid>
           )}
         </Grid>
       )}
-      
+
       {/* ストリーミング設定ダイアログ */}
       <Dialog
         open={streamDialogOpen}
@@ -332,7 +382,7 @@ function LocalFilesPage() {
             <Typography variant="subtitle1" gutterBottom>
               {selectedFile?.originalName}
             </Typography>
-            
+
             <TextField
               label="RTMP/SRT URL"
               fullWidth
@@ -342,7 +392,7 @@ function LocalFilesPage() {
               required
               helperText="例: rtmp://localhost:1935/live"
             />
-            
+
             <TextField
               label="ストリームキー"
               fullWidth
@@ -351,7 +401,7 @@ function LocalFilesPage() {
               onChange={(e) => setStreamKey(e.target.value)}
               helperText="省略可能"
             />
-            
+
             <FormControl fullWidth margin="normal">
               <InputLabel>ストリーム形式</InputLabel>
               <Select
@@ -363,7 +413,7 @@ function LocalFilesPage() {
                 <MenuItem value="srt">SRT</MenuItem>
               </Select>
             </FormControl>
-            
+
             <Button
               sx={{ mt: 2 }}
               size="small"
@@ -371,7 +421,7 @@ function LocalFilesPage() {
             >
               {advancedSettingsOpen ? '詳細設定を隠す' : '詳細設定を表示'}
             </Button>
-            
+
             {advancedSettingsOpen && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">映像設定</Typography>
@@ -381,7 +431,9 @@ function LocalFilesPage() {
                       <InputLabel>コーデック</InputLabel>
                       <Select
                         value={videoSettings.codec}
-                        onChange={(e) => setVideoSettings({...videoSettings, codec: e.target.value})}
+                        onChange={(e) =>
+                          setVideoSettings({ ...videoSettings, codec: e.target.value })
+                        }
                         label="コーデック"
                       >
                         <MenuItem value="libx264">H.264 (libx264)</MenuItem>
@@ -396,7 +448,9 @@ function LocalFilesPage() {
                       margin="normal"
                       size="small"
                       value={videoSettings.bitrate}
-                      onChange={(e) => setVideoSettings({...videoSettings, bitrate: e.target.value})}
+                      onChange={(e) =>
+                        setVideoSettings({ ...videoSettings, bitrate: e.target.value })
+                      }
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -407,7 +461,9 @@ function LocalFilesPage() {
                       size="small"
                       type="number"
                       value={videoSettings.framerate}
-                      onChange={(e) => setVideoSettings({...videoSettings, framerate: parseInt(e.target.value)})}
+                      onChange={(e) =>
+                        setVideoSettings({ ...videoSettings, framerate: parseInt(e.target.value) })
+                      }
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -416,8 +472,10 @@ function LocalFilesPage() {
                       <Select
                         value={`${videoSettings.width}x${videoSettings.height}`}
                         onChange={(e) => {
-                          const [width, height] = e.target.value.split('x').map(num => parseInt(num));
-                          setVideoSettings({...videoSettings, width, height});
+                          const [width, height] = e.target.value
+                            .split('x')
+                            .map((num) => parseInt(num));
+                          setVideoSettings({ ...videoSettings, width, height });
                         }}
                         label="解像度"
                       >
@@ -429,15 +487,19 @@ function LocalFilesPage() {
                     </FormControl>
                   </Grid>
                 </Grid>
-                
-                <Typography variant="subtitle2" sx={{ mt: 2 }}>音声設定</Typography>
+
+                <Typography variant="subtitle2" sx={{ mt: 2 }}>
+                  音声設定
+                </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <FormControl fullWidth margin="normal" size="small">
                       <InputLabel>コーデック</InputLabel>
                       <Select
                         value={audioSettings.codec}
-                        onChange={(e) => setAudioSettings({...audioSettings, codec: e.target.value})}
+                        onChange={(e) =>
+                          setAudioSettings({ ...audioSettings, codec: e.target.value })
+                        }
                         label="コーデック"
                       >
                         <MenuItem value="aac">AAC</MenuItem>
@@ -452,7 +514,9 @@ function LocalFilesPage() {
                       margin="normal"
                       size="small"
                       value={audioSettings.bitrate}
-                      onChange={(e) => setAudioSettings({...audioSettings, bitrate: e.target.value})}
+                      onChange={(e) =>
+                        setAudioSettings({ ...audioSettings, bitrate: e.target.value })
+                      }
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -460,7 +524,12 @@ function LocalFilesPage() {
                       <InputLabel>サンプルレート</InputLabel>
                       <Select
                         value={audioSettings.sampleRate}
-                        onChange={(e) => setAudioSettings({...audioSettings, sampleRate: parseInt(e.target.value)})}
+                        onChange={(e) =>
+                          setAudioSettings({
+                            ...audioSettings,
+                            sampleRate: parseInt(e.target.value),
+                          })
+                        }
                         label="サンプルレート"
                       >
                         <MenuItem value={48000}>48000 Hz</MenuItem>
@@ -474,7 +543,9 @@ function LocalFilesPage() {
                       <InputLabel>チャンネル数</InputLabel>
                       <Select
                         value={audioSettings.channels}
-                        onChange={(e) => setAudioSettings({...audioSettings, channels: parseInt(e.target.value)})}
+                        onChange={(e) =>
+                          setAudioSettings({ ...audioSettings, channels: parseInt(e.target.value) })
+                        }
                         label="チャンネル数"
                       >
                         <MenuItem value={2}>ステレオ (2)</MenuItem>
@@ -489,7 +560,9 @@ function LocalFilesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStreamDialogOpen(false)}>キャンセル</Button>
-          <Button onClick={handleStartStream} variant="contained">ストリーミング開始</Button>
+          <Button onClick={handleStartStream} variant="contained">
+            ストリーミング開始
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

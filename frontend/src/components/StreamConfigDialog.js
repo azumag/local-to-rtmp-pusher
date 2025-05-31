@@ -13,7 +13,7 @@ import {
   Typography,
   Box,
   CircularProgress,
-  Alert
+  Alert,
 } from '@mui/material';
 
 const STREAM_DEFAULTS = {
@@ -23,26 +23,26 @@ const STREAM_DEFAULTS = {
   videoBitrate: '2000k',
   audioBitrate: '128k',
   resolution: 'original',
-  preset: 'medium'
+  preset: 'medium',
 };
 
 const VIDEO_CODECS = [
   { value: 'libx264', label: 'H.264' },
   { value: 'libx265', label: 'H.265/HEVC' },
-  { value: 'copy', label: 'Copy (No re-encoding)' }
+  { value: 'copy', label: 'Copy (No re-encoding)' },
 ];
 
 const AUDIO_CODECS = [
   { value: 'aac', label: 'AAC' },
   { value: 'mp3', label: 'MP3' },
-  { value: 'copy', label: 'Copy (No re-encoding)' }
+  { value: 'copy', label: 'Copy (No re-encoding)' },
 ];
 
 const RESOLUTIONS = [
   { value: 'original', label: 'Original' },
   { value: '1920x1080', label: '1080p (1920x1080)' },
   { value: '1280x720', label: '720p (1280x720)' },
-  { value: '854x480', label: '480p (854x480)' }
+  { value: '854x480', label: '480p (854x480)' },
 ];
 
 const PRESETS = [
@@ -53,16 +53,16 @@ const PRESETS = [
   { value: 'fast', label: 'Fast' },
   { value: 'medium', label: 'Medium (Balanced)' },
   { value: 'slow', label: 'Slow (Better Quality)' },
-  { value: 'veryslow', label: 'Very Slow (Best Quality)' }
+  { value: 'veryslow', label: 'Very Slow (Best Quality)' },
 ];
 
-const StreamConfigDialog = ({ 
-  open, 
-  onClose, 
-  onStart, 
+const StreamConfigDialog = ({
+  open,
+  onClose,
+  onStart,
   file,
   isStreaming = false,
-  streamError = null
+  streamError = null,
 }) => {
   const [streamSettings, setStreamSettings] = useState(STREAM_DEFAULTS);
   const [isStarting, setIsStarting] = useState(false);
@@ -70,13 +70,13 @@ const StreamConfigDialog = ({
   const handleSettingChange = (field) => (event) => {
     setStreamSettings({
       ...streamSettings,
-      [field]: event.target.value
+      [field]: event.target.value,
     });
   };
 
   const handleStartStream = async () => {
     if (!file) return;
-    
+
     setIsStarting(true);
     try {
       await onStart(file, streamSettings);
@@ -88,8 +88,7 @@ const StreamConfigDialog = ({
     }
   };
 
-  const isFormValid = streamSettings.rtmpUrl && 
-    streamSettings.rtmpUrl.startsWith('rtmp://');
+  const isFormValid = streamSettings.rtmpUrl && streamSettings.rtmpUrl.startsWith('rtmp://');
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -120,7 +119,7 @@ const StreamConfigDialog = ({
                 onChange={handleSettingChange('videoCodec')}
                 label="Video Codec"
               >
-                {VIDEO_CODECS.map(codec => (
+                {VIDEO_CODECS.map((codec) => (
                   <MenuItem key={codec.value} value={codec.value}>
                     {codec.label}
                   </MenuItem>
@@ -135,7 +134,7 @@ const StreamConfigDialog = ({
                 onChange={handleSettingChange('audioCodec')}
                 label="Audio Codec"
               >
-                {AUDIO_CODECS.map(codec => (
+                {AUDIO_CODECS.map((codec) => (
                   <MenuItem key={codec.value} value={codec.value}>
                     {codec.label}
                   </MenuItem>
@@ -175,7 +174,7 @@ const StreamConfigDialog = ({
                 label="Resolution"
                 disabled={streamSettings.videoCodec === 'copy'}
               >
-                {RESOLUTIONS.map(res => (
+                {RESOLUTIONS.map((res) => (
                   <MenuItem key={res.value} value={res.value}>
                     {res.label}
                   </MenuItem>
@@ -191,7 +190,7 @@ const StreamConfigDialog = ({
                 label="Encoding Preset"
                 disabled={streamSettings.videoCodec === 'copy'}
               >
-                {PRESETS.map(preset => (
+                {PRESETS.map((preset) => (
                   <MenuItem key={preset.value} value={preset.value}>
                     {preset.label}
                   </MenuItem>
@@ -201,7 +200,8 @@ const StreamConfigDialog = ({
           </Box>
 
           <Typography variant="caption" color="text.secondary">
-            Note: Using 'copy' for codecs will preserve the original quality but may not be compatible with all streaming platforms.
+            Note: Using 'copy' for codecs will preserve the original quality but may not be
+            compatible with all streaming platforms.
           </Typography>
         </Box>
       </DialogContent>
