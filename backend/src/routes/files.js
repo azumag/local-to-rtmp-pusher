@@ -1,4 +1,5 @@
 const express = require('express');
+
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
@@ -19,23 +20,23 @@ const storage = multer.diskStorage({
     // オリジナルのファイル名を保持しつつ、タイムスタンプを追加
     const uniqueName = `${Date.now()}-${file.originalname}`;
     cb(null, uniqueName);
-  }
+  },
 });
 
-const upload = multer({ 
-  storage: storage,
+const upload = multer({
+  storage,
   limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB上限
   fileFilter: (req, file, cb) => {
     // 動画ファイルの種類をチェック
     const filetypes = /mp4|mov|avi|mkv|webm|flv|wmv|mpg|mpeg/;
     const mimetype = filetypes.test(file.mimetype);
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    
+
     if (mimetype && extname) {
       return cb(null, true);
     }
     cb(new Error('サポートされていないファイル形式です。動画ファイルをアップロードしてください。'));
-  }
+  },
 });
 
 // ファイル一覧の取得
@@ -61,16 +62,16 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({ error: 'ファイルがアップロードされていません' });
     }
-    
+
     const fileData = {
       filename: req.file.filename,
       originalName: req.file.originalname,
       path: req.file.path,
       size: req.file.size,
       mimetype: req.file.mimetype,
-      uploadedAt: new Date()
+      uploadedAt: new Date(),
     };
-    
+
     const savedFile = await fileService.saveFileInfo(fileData);
     res.status(201).json(savedFile);
   } catch (error) {
@@ -81,13 +82,13 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
 // ファイル情報の取得
 router.get('/:fileId', async (req, res, next) => {
   try {
-    const fileId = req.params.fileId;
+    const { fileId } = req.params;
     const fileInfo = await fileService.getFileInfo(fileId);
-    
+
     if (!fileInfo) {
       return res.status(404).json({ error: 'ファイルが見つかりません' });
     }
-    
+
     res.status(200).json(fileInfo);
   } catch (error) {
     next(error);
@@ -97,7 +98,7 @@ router.get('/:fileId', async (req, res, next) => {
 // ファイルの削除
 router.delete('/:fileId', async (req, res, next) => {
   try {
-    const fileId = req.params.fileId;
+    const { fileId } = req.params;
     await fileService.deleteFile(fileId);
     res.status(200).json({ message: 'ファイルが正常に削除されました' });
   } catch (error) {

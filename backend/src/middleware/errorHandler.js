@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 
-const errorHandler = (err, req, res, next) => {
-  let { statusCode = 500, message, code } = err;
+const errorHandler = (err, req, res) => {
+  const { statusCode = 500, message, code } = err;
 
   // Log error
   logger.error({
@@ -9,21 +9,22 @@ const errorHandler = (err, req, res, next) => {
     request: req.url,
     method: req.method,
     ip: req.ip,
-    statusCode
+    statusCode,
   });
 
   // Don't leak error details in production
+  let errorMessage = message;
   if (process.env.NODE_ENV === 'production' && statusCode === 500) {
-    message = 'Internal server error';
+    errorMessage = 'Internal server error';
   }
 
   res.status(statusCode).json({
     success: false,
     error: {
-      message,
+      message: errorMessage,
       code: code || 'ERROR',
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    }
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    },
   });
 };
 

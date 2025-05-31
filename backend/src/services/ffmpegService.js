@@ -16,16 +16,21 @@ class FFmpegService {
       audioBitrate = STREAM_DEFAULTS.AUDIO_BITRATE,
       resolution,
       preset = STREAM_DEFAULTS.PRESET,
-      format = STREAM_DEFAULTS.FORMAT
+      format = STREAM_DEFAULTS.FORMAT,
     } = settings;
 
     const command = ffmpeg(input)
       .outputOptions([
-        '-threads', FFMPEG.THREAD_COUNT,
-        '-preset', preset,
-        '-tune', 'zerolatency',
-        '-max_muxing_queue_size', '1024',
-        '-flvflags', 'no_duration_filesize'
+        '-threads',
+        FFMPEG.THREAD_COUNT,
+        '-preset',
+        preset,
+        '-tune',
+        'zerolatency',
+        '-max_muxing_queue_size',
+        '1024',
+        '-flvflags',
+        'no_duration_filesize',
       ])
       .on('start', (commandLine) => {
         logger.info('FFmpeg command started:', commandLine);
@@ -53,7 +58,7 @@ class FFmpegService {
       }
     }
 
-    // Audio settings  
+    // Audio settings
     if (audioCodec === 'copy') {
       command.audioCodec('copy');
     } else {
@@ -73,13 +78,13 @@ class FFmpegService {
     return new Promise((resolve, reject) => {
       try {
         const command = this.buildFFmpegCommand(input, outputUrl, settings);
-        
+
         this.activeProcesses.set(streamId, {
           command,
           startTime: new Date(),
           input,
           outputUrl,
-          settings
+          settings,
         });
 
         command.on('error', (err) => {
@@ -92,11 +97,11 @@ class FFmpegService {
         });
 
         command.run();
-        
+
         resolve({
           streamId,
           status: 'started',
-          startTime: new Date()
+          startTime: new Date(),
         });
       } catch (error) {
         this.activeProcesses.delete(streamId);
@@ -133,7 +138,7 @@ class FFmpegService {
       startTime: process.startTime,
       input: process.input,
       outputUrl: process.outputUrl,
-      settings: process.settings
+      settings: process.settings,
     };
   }
 
@@ -144,7 +149,7 @@ class FFmpegService {
         streamId,
         status: 'active',
         startTime: process.startTime,
-        outputUrl: process.outputUrl
+        outputUrl: process.outputUrl,
       });
     }
     return streams;
@@ -153,11 +158,11 @@ class FFmpegService {
   async validateFFmpegInstallation() {
     return new Promise((resolve, reject) => {
       const ffmpegCheck = spawn('ffmpeg', ['-version']);
-      
+
       ffmpegCheck.on('error', () => {
         reject(new Error('FFmpeg is not installed'));
       });
-      
+
       ffmpegCheck.on('close', (code) => {
         if (code === 0) {
           resolve(true);
