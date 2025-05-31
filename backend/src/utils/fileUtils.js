@@ -9,9 +9,7 @@ const DEFAULT_CACHE_DIR = path.join(__dirname, '../../cache');
  * 一意のIDを生成
  * @returns {string} ユニークID
  */
-const generateUniqueId = () => {
-  return crypto.randomBytes(16).toString('hex');
-};
+const generateUniqueId = () => crypto.randomBytes(16).toString('hex');
 
 /**
  * ファイルの存在確認
@@ -34,17 +32,17 @@ const fileExists = async (filePath) => {
  */
 const getFileType = (filePath) => {
   const ext = path.extname(filePath).toLowerCase();
-  
+
   const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.mpg', '.mpeg'];
   const audioExts = ['.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a'];
-  
+
   if (videoExts.includes(ext)) {
     return 'video';
-  } else if (audioExts.includes(ext)) {
-    return 'audio';
-  } else {
-    return 'unknown';
   }
+  if (audioExts.includes(ext)) {
+    return 'audio';
+  }
+  return 'unknown';
 };
 
 /**
@@ -55,10 +53,10 @@ const getFileType = (filePath) => {
 const getCacheDir = (subdirectory = '') => {
   const cacheDir = process.env.CACHE_DIR || DEFAULT_CACHE_DIR;
   const targetDir = subdirectory ? path.join(cacheDir, subdirectory) : cacheDir;
-  
+
   // ディレクトリが存在しない場合は作成
   fs.ensureDirSync(targetDir);
-  
+
   return targetDir;
 };
 
@@ -72,7 +70,7 @@ const getTempFilePath = (originalFilename, subdirectory = 'temp') => {
   const ext = path.extname(originalFilename);
   const filename = `${Date.now()}-${generateUniqueId()}${ext}`;
   const tempDir = getCacheDir(subdirectory);
-  
+
   return path.join(tempDir, filename);
 };
 
@@ -85,14 +83,14 @@ const cleanupOldFiles = async (directory, maxAgeMs = 24 * 60 * 60 * 1000) => {
   try {
     const files = await fs.readdir(directory);
     const now = Date.now();
-    
+
     for (const file of files) {
       const filePath = path.join(directory, file);
       const stats = await fs.stat(filePath);
-      
+
       // ファイルの最終更新日時を確認
       const fileAge = now - stats.mtimeMs;
-      
+
       if (fileAge > maxAgeMs) {
         await fs.remove(filePath);
       }
@@ -108,5 +106,5 @@ module.exports = {
   getFileType,
   getCacheDir,
   getTempFilePath,
-  cleanupOldFiles
+  cleanupOldFiles,
 };

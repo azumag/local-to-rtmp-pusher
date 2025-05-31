@@ -14,7 +14,7 @@ module.exports = {
     ecmaVersion: 'latest'
   },
   rules: {
-    'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
+    'no-console': 'off', // ログ出力のため許可
     'no-unused-vars': ['error', { argsIgnorePattern: 'next|req|res' }],
     'prefer-const': 'error',
     'no-var': 'error',
@@ -27,6 +27,13 @@ module.exports = {
     'jest/no-focused-tests': 'error',
     'jest/no-identical-title': 'error',
     'jest/prefer-to-have-length': 'warn',
-    'jest/valid-expect': 'error'
+    'jest/valid-expect': 'error',
+    'consistent-return': 'off', // 非同期処理のため
+    'no-use-before-define': ['error', { functions: false }],
+    'no-restricted-syntax': 'off', // for...of許可
+    'no-await-in-loop': 'off', // ループ内のawait許可
+    'global-require': 'off', // 動的require許可
+    'class-methods-use-this': 'off', // クラスメソッドでthis不要許可
+    'max-classes-per-file': 'off' // 複数クラス許可
   }
 };
