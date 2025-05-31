@@ -1,44 +1,47 @@
 services:
-  frontend:
+  streamcaster-frontend:
     build: ./frontend
+    container_name: streamcaster-frontend
     ports:
-      - "8080:80"
+      - '8080:80'
     depends_on:
-      - backend
+      - streamcaster-backend
     networks:
-      - app-network
+      - streamcaster-network
     restart: unless-stopped
 
-  backend:
+  streamcaster-backend:
     build: ./backend
+    container_name: streamcaster-backend
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - NODE_ENV=production
-      - RTMP_SERVER=rtmp://rtmp-server:1935/live
+      - RTMP_SERVER=rtmp://streamcaster-rtmp:1935/live
     volumes:
-      - media-cache:/app/cache
+      - streamcaster-cache:/app/cache
     depends_on:
-      - rtmp-server
+      - streamcaster-rtmp
     networks:
-      - app-network
+      - streamcaster-network
     restart: unless-stopped
 
-  rtmp-server:
+  streamcaster-rtmp:
     image: tiangolo/nginx-rtmp
+    container_name: streamcaster-rtmp
     volumes:
       - ./rtmp-server/config/nginx.conf:/etc/nginx/nginx.conf
-      - rtmp-data:/opt/rtmp/data
+      - streamcaster-data:/opt/rtmp/data
     ports:
-      - "1935:1935"  # RTMP
-      - "8000:8000"  # HTTP
+      - '1935:1935' # RTMP
+      - '8000:8000' # HTTP
     networks:
-      - app-network
+      - streamcaster-network
     restart: unless-stopped
 
 networks:
-  app-network:
+  streamcaster-network:
 
 volumes:
-  media-cache:
-  rtmp-data:
+  streamcaster-cache:
+  streamcaster-data:
