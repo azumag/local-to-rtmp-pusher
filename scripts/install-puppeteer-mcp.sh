@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Ensure this script file is marked executable (`chmod +x scripts/install-puppeteer-mcp.sh`) so it can be run directly.
 # Install Puppeteer MCP Server
 echo "Installing Puppeteer MCP Server..."
 
