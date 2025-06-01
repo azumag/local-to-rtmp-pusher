@@ -264,6 +264,13 @@ export const usePersistentStreaming = () => {
     fetchRtmpConfig();
   }, [fetchActiveSessions, fetchRtmpConfig]);
 
+  // アクティブセッションがあるのに現在のセッションが選択されていない場合、自動的に選択
+  useEffect(() => {
+    if (!currentSession && activeSessions.length > 0) {
+      setCurrentSession(activeSessions[0]);
+    }
+  }, [currentSession, activeSessions]);
+
   // 現在のセッションの状態監視
   useEffect(() => {
     if (currentSession) {
