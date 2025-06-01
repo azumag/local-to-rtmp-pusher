@@ -91,7 +91,11 @@ export const usePersistentStreaming = () => {
       try {
         const session = await persistentStreamService.startSession(sessionConfig);
         setCurrentSession(session);
+        
+        // セッション開始直後に状態を即座に取得
+        await fetchSessionStatus(session.id);
         await fetchActiveSessions();
+        
         return session;
       } catch (err) {
         setError(err.message);
@@ -100,7 +104,7 @@ export const usePersistentStreaming = () => {
         setIsLoading(false);
       }
     },
-    [fetchActiveSessions]
+    [fetchActiveSessions, fetchSessionStatus]
   );
 
   /**
@@ -264,7 +268,7 @@ export const usePersistentStreaming = () => {
   useEffect(() => {
     if (currentSession) {
       fetchSessionStatus(currentSession.id);
-      startStatusMonitoring(currentSession.id);
+      startStatusMonitoring(currentSession.id, 2000); // 2秒ごとに状態を確認
     } else {
       stopStatusMonitoring();
     }
