@@ -136,13 +136,34 @@ function LocalFilesPage() {
           <Typography variant="body1">
             動画ファイルをアップロードしてRTMP/SRTで配信することができます。
           </Typography>
-          {currentSession && !canSwitchContent && sessionStatus && (
-            <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
-              {sessionStatus.status === 'connecting' && '配信セッションに接続中です...'}
-              {sessionStatus.status === 'error' && `セッションエラー: ${sessionStatus.errorMessage || 'FFmpegの起動に失敗しました'}`}
-              {sessionStatus.status === 'reconnecting' && '再接続中です...'}
-              {sessionStatus.status === 'disconnected' && 'セッションが切断されています'}
-            </Typography>
+          
+          {/* セッション状態の詳細表示 */}
+          {currentSession && (
+            <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid #ddd' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                セッション: {currentSession.id.slice(-8)} | 
+                状態: {sessionStatus?.status || 'unknown'} | 
+                送信可能: {canSwitchContent ? 'はい' : 'いいえ'} |
+                アクティブ: {sessionStatus?.isActive ? 'はい' : 'いいえ'}
+              </Typography>
+              
+              {!canSwitchContent && sessionStatus && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+                  {sessionStatus.status === 'connecting' && '⏳ RTMPストリーム接続中です... しばらくお待ちください'}
+                  {sessionStatus.status === 'error' && `❌ セッションエラー: ${sessionStatus.errorMessage || 'FFmpegの起動に失敗しました'}`}
+                  {sessionStatus.status === 'reconnecting' && '🔄 再接続中です...'}
+                  {sessionStatus.status === 'disconnected' && '⚠️ セッションが切断されています'}
+                  {!['connecting', 'error', 'reconnecting', 'disconnected'].includes(sessionStatus.status) && 
+                    `❓ 予期しない状態: ${sessionStatus.status}`}
+                </Typography>
+              )}
+              
+              {canSwitchContent && (
+                <Typography variant="caption" color="success.main" sx={{ display: 'block', mt: 0.5 }}>
+                  ✅ ファイルを配信に送ることができます
+                </Typography>
+              )}
+            </Box>
           )}
         </Box>
 

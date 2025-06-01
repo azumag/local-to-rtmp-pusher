@@ -454,8 +454,8 @@ function NewStreamsPage() {
 
               {canSwitchContent ? (
                 <Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    現在のコンテンツ: {sessionStatus?.isStandbyImage ? '静止画' : 'ファイル'}
+                  <Typography variant="body2" color="success.main" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    ✅ 配信中: {sessionStatus?.isStandbyImage ? '静止画' : 'ファイル'}
                   </Typography>
                   {/* デバッグ情報 */}
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -488,6 +488,23 @@ function NewStreamsPage() {
                   <Alert severity="info" sx={{ mb: 2 }}>
                     ファイルページでファイルを選択して配信に送ることができます
                   </Alert>
+                </Box>
+              ) : currentSession ? (
+                <Box>
+                  <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
+                    {sessionStatus?.status === 'connecting' && '⏳ RTMPストリーム接続中...'}
+                    {sessionStatus?.status === 'error' && '❌ 接続エラーが発生しました'}
+                    {sessionStatus?.status === 'reconnecting' && '🔄 再接続中...'}
+                    {sessionStatus?.status === 'disconnected' && '⚠️ セッションが切断されています'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    セッション状態: {sessionStatus?.status} | アクティブ: {sessionStatus?.isActive ? 'はい' : 'いいえ'}
+                  </Typography>
+                  {sessionStatus?.errorMessage && (
+                    <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                      エラー詳細: {sessionStatus.errorMessage}
+                    </Typography>
+                  )}
                 </Box>
               ) : (
                 <Typography variant="body2" color="text.secondary">
