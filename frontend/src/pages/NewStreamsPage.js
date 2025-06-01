@@ -457,6 +457,10 @@ function NewStreamsPage() {
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     現在のコンテンツ: {sessionStatus?.isStandbyImage ? '静止画' : 'ファイル'}
                   </Typography>
+                  {/* デバッグ情報 */}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    セッション状態: {sessionStatus?.status} | アクティブ: {sessionStatus?.isActive ? 'はい' : 'いいえ'}
+                  </Typography>
                   
                   {sessionStatus?.isStandbyImage && sessionStatus?.standbyImageName && (
                     <Box sx={{ mb: 2 }}>

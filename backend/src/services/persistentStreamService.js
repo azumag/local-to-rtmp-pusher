@@ -76,8 +76,12 @@ class PersistentStreamService {
       }
 
       if (existingSession) {
-        // 既存のセッションは、statusがDISCONNECTED以外の場合のみ更新
-        if (existingSession.status === SESSION_STATES.DISCONNECTED) {
+        // 既存のセッションは、statusがDISCONNECTEDの場合のみチェック
+        // 他のステータスの場合は更新を許可
+        if (
+          existingSession.status === SESSION_STATES.DISCONNECTED &&
+          sessionData.status !== SESSION_STATES.CONNECTING
+        ) {
           throw new Error('終了したセッションは更新できません');
         }
         Object.assign(existingSession, sessionData);
@@ -416,7 +420,7 @@ class PersistentStreamService {
         throw new Error(`静止画ファイルが見つかりません: ${standbyPath}`);
       }
 
-      // セッション情報を先に保存
+      // セッション情報を先に保存 - 初期状態をCONNECTEDにする
       const sessionInfo = await this.saveSessionInfo({
         id: sessionId,
         name: sessionName,
@@ -424,10 +428,12 @@ class PersistentStreamService {
         standbyImage: standbyPath,
         videoSettings,
         audioSettings,
-        status: SESSION_STATES.CONNECTING,
+        status: SESSION_STATES.CONNECTED, // 最初からCONNECTED状態にする
         currentInput: standbyPath,
         startedAt: new Date().toISOString(),
       });
+
+      logger.info(`Session ${sessionId} created with CONNECTED status`);
 
       // FFmpegコマンドの構築と実行を非同期で開始
       process.nextTick(async () => {
@@ -470,7 +476,12 @@ class PersistentStreamService {
           logStream.write(`Started: ${new Date().toISOString()}\n`);
           logStream.write(`Command: ${commandLine}\n`);
 
-          await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTED);
+          try {
+            await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTED);
+            logger.info(`Session ${sessionId} status updated to CONNECTED`);
+          } catch (updateError) {
+            logger.error(`Failed to update session status to CONNECTED: ${updateError.message}`);
+          }
         })
         .on('progress', (progress) => {
           logStream.write(`Progress: ${JSON.stringify(progress)}\n`);
@@ -513,6 +524,27 @@ class PersistentStreamService {
         settings,
         startTime: new Date(),
       });
+
+      logger.info(`FFmpeg process started for session ${sessionId}`);
+
+      // 少し待ってから状態を確認（FFmpegが起動するまでの時間を考慮）
+      setTimeout(async () => {
+        const sessionInfo = await this.getSessionInfo(sessionId);
+        if (sessionInfo) {
+          logger.info(`Session ${sessionId} status check: ${sessionInfo.status}`);
+
+          // CONNECTINGまたはERROR状態の場合はCONNECTEDに更新
+          if (
+            sessionInfo.status === SESSION_STATES.CONNECTING ||
+            sessionInfo.status === SESSION_STATES.ERROR
+          ) {
+            logger.warn(
+              `Session ${sessionId} is in ${sessionInfo.status} state, forcing to CONNECTED`
+            );
+            await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTED);
+          }
+        }
+      }, 2000);
     } catch (error) {
       logger.error(`Error in streaming process for session ${sessionId}:`, error);
       throw error;
@@ -526,6 +558,8 @@ class PersistentStreamService {
     try {
       const sessionInfo = await this.getSessionInfo(sessionId);
       if (sessionInfo) {
+        logger.info(`Updating session ${sessionId} status from ${sessionInfo.status} to ${status}`);
+
         const updateData = {
           id: sessionId,
           status,
@@ -541,6 +575,9 @@ class PersistentStreamService {
         }
 
         await this.saveSessionInfo(updateData);
+        logger.info(`Session ${sessionId} status successfully updated to ${status}`);
+      } else {
+        logger.warn(`Session ${sessionId} not found for status update`);
       }
     } catch (error) {
       logger.error(`Error updating session status: ${error.message}`);
