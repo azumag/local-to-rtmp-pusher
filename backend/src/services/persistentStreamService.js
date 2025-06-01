@@ -608,6 +608,17 @@ class PersistentStreamService {
         return null;
       }
 
+      // 現在の入力が静止画かどうかを判定
+      const currentInput = sessionInfo.currentInput || '';
+      const isStandbyImage =
+        currentInput.includes('.jpg') ||
+        currentInput.includes('.png') ||
+        currentInput.includes('.gif') ||
+        currentInput.includes('standby');
+
+      // 静止画のファイル名を取得
+      const standbyImageName = isStandbyImage ? path.basename(currentInput) : null;
+
       return {
         ...sessionInfo,
         isActive: !!activeSession,
@@ -615,6 +626,9 @@ class PersistentStreamService {
         uptime: sessionInfo.startedAt
           ? Math.floor((Date.now() - new Date(sessionInfo.startedAt).getTime()) / 1000)
           : 0,
+        isStandbyImage,
+        standbyImageName,
+        currentInputType: isStandbyImage ? 'standby' : 'file',
       };
     } catch (error) {
       logger.error(`Error getting session status: ${error.message}`);

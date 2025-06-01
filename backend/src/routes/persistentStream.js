@@ -400,4 +400,37 @@ router.get('/session/states', (req, res) => {
   });
 });
 
+/**
+ * 静止画プレビュー
+ * GET /api/stream/standby/:sessionId
+ */
+router.get('/standby/:sessionId', async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+
+    const sessionInfo = await persistentStreamService.getSessionInfo(sessionId);
+    if (!sessionInfo) {
+      return res.status(404).json({
+        error: 'セッションが見つかりません',
+      });
+    }
+
+    const standbyPath =
+      sessionInfo.standbyImage || persistentStreamService.getDefaultStandbyImagePath();
+
+    // ファイルの存在確認
+    if (!(await fs.pathExists(standbyPath))) {
+      return res.status(404).json({
+        error: '静止画ファイルが見つかりません',
+      });
+    }
+
+    // 静止画を送信
+    res.sendFile(standbyPath);
+  } catch (error) {
+    logger.error(`Error getting standby image: ${error.message}`);
+    next(error);
+  }
+});
+
 module.exports = router;
