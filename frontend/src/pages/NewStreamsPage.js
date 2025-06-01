@@ -64,6 +64,8 @@ function NewStreamsPage() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertSeverity, setAlertSeverity] = useState('info');
+  const [standbyImageFile, setStandbyImageFile] = useState(null);
+  const [standbyImagePreview, setStandbyImagePreview] = useState(null);
 
   // エラー表示
   React.useEffect(() => {
@@ -110,13 +112,36 @@ function NewStreamsPage() {
     }
 
     try {
+      // 静止画ファイルがある場合は先にアップロード
+      let standbyImagePath = null;
+      if (standbyImageFile) {
+        const formData = new FormData();
+        formData.append('image', standbyImageFile);
+        
+        // 一時的な静止画アップロード
+        const uploadResponse = await fetch('/api/stream/content/upload-temp', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          standbyImagePath = uploadResult.path;
+        }
+      }
+
       await startSession({
         endpoints: activeEndpoints,
         videoSettings: localConfig.videoSettings,
         audioSettings: localConfig.audioSettings,
         sessionName: `配信セッション ${new Date().toLocaleString()}`,
+        standbyImage: standbyImagePath,
       });
       showAlert('配信セッションを開始しました', 'success');
+      
+      // セッション開始後、静止画設定をクリア
+      setStandbyImageFile(null);
+      setStandbyImagePreview(null);
     } catch (err) {
       showAlert(`セッション開始に失敗しました: ${err.message}`, 'error');
     }
@@ -202,6 +227,27 @@ function NewStreamsPage() {
     setLocalConfig(newConfig);
   };
 
+  // 静止画ファイルの処理
+  const handleStandbyImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setStandbyImageFile(file);
+      
+      // プレビュー用のURLを作成
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setStandbyImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // 静止画をクリア
+  const clearStandbyImage = () => {
+    setStandbyImageFile(null);
+    setStandbyImagePreview(null);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'connected':
@@ -251,6 +297,67 @@ function NewStreamsPage() {
           静止画での配信が始まり、ファイルの切り替えが可能になります。
         </Typography>
       </Paper>
+
+      {/* 静止画設定パネル */}
+      {!currentSession && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            デフォルト静止画設定
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            セッション開始時に使用する静止画を設定できます。設定しない場合はデフォルトの静止画が使用されます。
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<PhotoCameraIcon />}
+            >
+              静止画を選択
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                onChange={handleStandbyImageChange}
+              />
+            </Button>
+            
+            {standbyImageFile && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2">
+                  {standbyImageFile.name}
+                </Typography>
+                <Button
+                  size="small"
+                  color="error"
+                  onClick={clearStandbyImage}
+                >
+                  削除
+                </Button>
+              </Box>
+            )}
+          </Box>
+          
+          {standbyImagePreview && (
+            <Box sx={{ mt: 2, maxWidth: 300 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                プレビュー:
+              </Typography>
+              <img
+                src={standbyImagePreview}
+                alt="静止画プレビュー"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  border: '1px solid #ddd',
+                  borderRadius: 4,
+                }}
+              />
+            </Box>
+          )}
+        </Paper>
+      )}
 
       <Grid container spacing={3}>
         {/* セッション制御パネル */}
