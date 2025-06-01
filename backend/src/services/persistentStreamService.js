@@ -146,20 +146,50 @@ class PersistentStreamService {
   }
 
   /**
-   * デュアルRTMP出力用のFFmpegコマンド構築
+   * エンドポイント用の設定をマージ（グローバル設定をデフォルトとして使用）
    */
-  buildDualRtmpCommand(input, endpoints, settings) {
-    const {
-      videoCodec = 'libx264',
-      videoBitrate = '2500k',
-      videoWidth = 1920,
-      videoHeight = 1080,
-      fps = 30,
-      audioCodec = 'aac',
-      audioBitrate = '128k',
-      audioSampleRate = 44100,
-      audioChannels = 2,
-    } = settings;
+  mergeEndpointSettings(globalSettings, endpointSettings) {
+    const defaults = {
+      videoCodec: 'libx264',
+      videoBitrate: '2500k',
+      videoWidth: 1920,
+      videoHeight: 1080,
+      fps: 30,
+      audioCodec: 'aac',
+      audioBitrate: '128k',
+      audioSampleRate: 44100,
+      audioChannels: 2,
+    };
+
+    return {
+      videoCodec: endpointSettings?.videoCodec || globalSettings?.videoCodec || defaults.videoCodec,
+      videoBitrate:
+        endpointSettings?.videoBitrate || globalSettings?.videoBitrate || defaults.videoBitrate,
+      videoWidth: endpointSettings?.videoWidth || globalSettings?.videoWidth || defaults.videoWidth,
+      videoHeight:
+        endpointSettings?.videoHeight || globalSettings?.videoHeight || defaults.videoHeight,
+      fps: endpointSettings?.fps || globalSettings?.fps || defaults.fps,
+      audioCodec: endpointSettings?.audioCodec || globalSettings?.audioCodec || defaults.audioCodec,
+      audioBitrate:
+        endpointSettings?.audioBitrate || globalSettings?.audioBitrate || defaults.audioBitrate,
+      audioSampleRate:
+        endpointSettings?.audioSampleRate ||
+        globalSettings?.audioSampleRate ||
+        defaults.audioSampleRate,
+      audioChannels:
+        endpointSettings?.audioChannels || globalSettings?.audioChannels || defaults.audioChannels,
+    };
+  }
+
+  /**
+   * 複数RTMP出力用のFFmpegコマンド構築（エンドポイント毎の設定対応）
+   */
+  buildDualRtmpCommand(input, endpoints, globalSettings) {
+    const activeEndpoints = endpoints.filter((ep) => ep.enabled);
+
+    if (activeEndpoints.length === 0) {
+      throw new Error('有効なエンドポイントがありません');
+    }
 
     let command = ffmpeg(input);
 
@@ -171,21 +201,7 @@ class PersistentStreamService {
       command = ffmpeg(input).inputOptions(['-re']);
     }
 
-    // ビデオ設定
-    command = command
-      .videoCodec(videoCodec)
-      .videoBitrate(videoBitrate)
-      .fps(fps)
-      .size(`${videoWidth}x${videoHeight}`);
-
-    // オーディオ設定
-    command = command
-      .audioCodec(audioCodec)
-      .audioBitrate(audioBitrate)
-      .audioFrequency(audioSampleRate)
-      .audioChannels(audioChannels);
-
-    // 再接続オプション
+    // 共通オプション
     command = command
       .addOption('-reconnect', '1')
       .addOption('-reconnect_streamed', '1')
@@ -193,21 +209,63 @@ class PersistentStreamService {
       .addOption('-rtmp_live', 'live')
       .addOption('-rtmp_buffer', '1000');
 
-    // 有効なエンドポイントのみ出力に追加
-    const activeEndpoints = endpoints.filter((ep) => ep.enabled);
-
     if (activeEndpoints.length === 1) {
-      // 単一出力
+      // 単一出力の場合
       const endpoint = activeEndpoints[0];
+      const settings = this.mergeEndpointSettings(globalSettings, {
+        ...endpoint.videoSettings,
+        ...endpoint.audioSettings,
+      });
+
+      command = command
+        .videoCodec(settings.videoCodec)
+        .videoBitrate(settings.videoBitrate)
+        .fps(settings.fps)
+        .size(`${settings.videoWidth}x${settings.videoHeight}`)
+        .audioCodec(settings.audioCodec)
+        .audioBitrate(settings.audioBitrate)
+        .audioFrequency(settings.audioSampleRate)
+        .audioChannels(settings.audioChannels);
+
       const outputUrl = endpoint.streamKey ? `${endpoint.url}/${endpoint.streamKey}` : endpoint.url;
       command = command.format('flv').output(outputUrl);
-    } else if (activeEndpoints.length === 2) {
-      // デュアル出力
+    } else {
+      // 複数出力の場合 - 各エンドポイントに異なる設定を適用
       activeEndpoints.forEach((endpoint) => {
+        const settings = this.mergeEndpointSettings(globalSettings, {
+          ...endpoint.videoSettings,
+          ...endpoint.audioSettings,
+        });
+
         const outputUrl = endpoint.streamKey
           ? `${endpoint.url}/${endpoint.streamKey}`
           : endpoint.url;
-        command = command.format('flv').output(outputUrl);
+
+        // 複数出力の場合、各出力に個別の設定を適用
+        // 注意: fluent-ffmpegの制限により、複数出力で異なる設定を使用するには
+        // より複雑なFFmpegコマンドが必要な場合があります
+        command = command
+          .output(outputUrl)
+          .outputOptions([
+            '-c:v',
+            settings.videoCodec,
+            '-b:v',
+            settings.videoBitrate,
+            '-r',
+            settings.fps.toString(),
+            '-s',
+            `${settings.videoWidth}x${settings.videoHeight}`,
+            '-c:a',
+            settings.audioCodec,
+            '-b:a',
+            settings.audioBitrate,
+            '-ar',
+            settings.audioSampleRate.toString(),
+            '-ac',
+            settings.audioChannels.toString(),
+            '-f',
+            'flv',
+          ]);
       });
     }
 

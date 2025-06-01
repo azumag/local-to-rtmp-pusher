@@ -17,10 +17,12 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
   Divider,
   LinearProgress,
   Snackbar,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   PlayArrow as PlayArrowIcon,
@@ -28,7 +30,7 @@ import {
   Upload as UploadIcon,
   Settings as SettingsIcon,
   PhotoCamera as PhotoCameraIcon,
-  Videocam as VideocamIcon,
+  ExpandMore as ExpandMoreIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { usePersistentStreaming } from '../hooks/usePersistentStreaming';
@@ -50,7 +52,6 @@ function NewStreamsPage() {
     clearError,
     fetchActiveSessions,
     SESSION_STATE_LABELS,
-    isSessionActive,
     canSwitchContent,
     isConnecting,
   } = usePersistentStreaming();
@@ -72,10 +73,20 @@ function NewStreamsPage() {
     }
   }, [error, clearError]);
 
-  // RTMP設定の初期化
+  // RTMP設定の初期化と下位互換性のためのマイグレーション
   React.useEffect(() => {
     if (rtmpConfig && !localConfig) {
-      setLocalConfig(rtmpConfig);
+      // 下位互換性のためにエンドポイントに新しいフィールドを追加
+      const migratedConfig = {
+        ...rtmpConfig,
+        endpoints: rtmpConfig.endpoints.map(endpoint => ({
+          ...endpoint,
+          // 既存の設定になければ新しいフィールドを追加
+          videoSettings: endpoint.videoSettings || null,
+          audioSettings: endpoint.audioSettings || null,
+        }))
+      };
+      setLocalConfig(migratedConfig);
     }
   }, [rtmpConfig, localConfig]);
 
@@ -164,6 +175,23 @@ function NewStreamsPage() {
   const updateEndpoint = (index, field, value) => {
     const newConfig = { ...localConfig };
     newConfig.endpoints[index][field] = value;
+    setLocalConfig(newConfig);
+  };
+
+  // エンドポイント固有のエンコーディング設定を更新
+  const updateEndpointEncoding = (index, category, field, value) => {
+    const newConfig = { ...localConfig };
+    if (!newConfig.endpoints[index][category]) {
+      newConfig.endpoints[index][category] = {};
+    }
+    newConfig.endpoints[index][category][field] = value;
+    setLocalConfig(newConfig);
+  };
+
+  // エンドポイント固有のエンコーディング設定をクリア（グローバル設定を使用）
+  const clearEndpointEncoding = (index, category) => {
+    const newConfig = { ...localConfig };
+    newConfig.endpoints[index][category] = null;
     setLocalConfig(newConfig);
   };
 
@@ -419,7 +447,7 @@ function NewStreamsPage() {
                     />
                   </Box>
 
-                  <Grid container spacing={2}>
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
                     <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
@@ -439,13 +467,167 @@ function NewStreamsPage() {
                       />
                     </Grid>
                   </Grid>
+
+                  {/* エンドポイント固有のエンコーディング設定 */}
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body2">
+                        個別エンコーディング設定 
+                        {(endpoint.videoSettings || endpoint.audioSettings) && (
+                          <Chip size="small" color="primary" label="カスタム" sx={{ ml: 1 }} />
+                        )}
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        このエンドポイント専用の設定を指定できます。未設定の場合はグローバル設定が適用されます。
+                      </Typography>
+
+                      {/* ビデオ設定 */}
+                      <Box sx={{ mb: 3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle2">ビデオ設定</Typography>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={!!endpoint.videoSettings}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    updateEndpointEncoding(index, 'videoSettings', 'bitrate', '2500k');
+                                  } else {
+                                    clearEndpointEncoding(index, 'videoSettings');
+                                  }
+                                }}
+                              />
+                            }
+                            label="個別設定を使用"
+                            sx={{ ml: 'auto' }}
+                          />
+                        </Box>
+                        {endpoint.videoSettings && (
+                          <Grid container spacing={2}>
+                            <Grid item xs={6} sm={3}>
+                              <TextField
+                                fullWidth
+                                label="ビットレート"
+                                value={endpoint.videoSettings.bitrate || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'videoSettings', 'bitrate', e.target.value)}
+                                placeholder="2500k"
+                                size="small"
+                              />
+                            </Grid>
+                            <Grid item xs={6} sm={3}>
+                              <TextField
+                                fullWidth
+                                label="FPS"
+                                type="number"
+                                value={endpoint.videoSettings.fps || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'videoSettings', 'fps', parseInt(e.target.value))}
+                                placeholder="30"
+                                size="small"
+                              />
+                            </Grid>
+                            <Grid item xs={6} sm={3}>
+                              <TextField
+                                fullWidth
+                                label="幅"
+                                type="number"
+                                value={endpoint.videoSettings.width || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'videoSettings', 'width', parseInt(e.target.value))}
+                                placeholder="1920"
+                                size="small"
+                              />
+                            </Grid>
+                            <Grid item xs={6} sm={3}>
+                              <TextField
+                                fullWidth
+                                label="高さ"
+                                type="number"
+                                value={endpoint.videoSettings.height || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'videoSettings', 'height', parseInt(e.target.value))}
+                                placeholder="1080"
+                                size="small"
+                              />
+                            </Grid>
+                          </Grid>
+                        )}
+                      </Box>
+
+                      {/* オーディオ設定 */}
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle2">オーディオ設定</Typography>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={!!endpoint.audioSettings}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    updateEndpointEncoding(index, 'audioSettings', 'bitrate', '128k');
+                                  } else {
+                                    clearEndpointEncoding(index, 'audioSettings');
+                                  }
+                                }}
+                              />
+                            }
+                            label="個別設定を使用"
+                            sx={{ ml: 'auto' }}
+                          />
+                        </Box>
+                        {endpoint.audioSettings && (
+                          <Grid container spacing={2}>
+                            <Grid item xs={6} sm={4}>
+                              <TextField
+                                fullWidth
+                                label="ビットレート"
+                                value={endpoint.audioSettings.bitrate || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'audioSettings', 'bitrate', e.target.value)}
+                                placeholder="128k"
+                                size="small"
+                              />
+                            </Grid>
+                            <Grid item xs={6} sm={4}>
+                              <TextField
+                                fullWidth
+                                label="サンプルレート"
+                                type="number"
+                                value={endpoint.audioSettings.sampleRate || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'audioSettings', 'sampleRate', parseInt(e.target.value))}
+                                placeholder="44100"
+                                size="small"
+                              />
+                            </Grid>
+                            <Grid item xs={6} sm={4}>
+                              <TextField
+                                fullWidth
+                                label="チャンネル"
+                                type="number"
+                                value={endpoint.audioSettings.channels || ''}
+                                onChange={(e) => updateEndpointEncoding(index, 'audioSettings', 'channels', parseInt(e.target.value))}
+                                placeholder="2"
+                                size="small"
+                              />
+                            </Grid>
+                          </Grid>
+                        )}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
                 </Paper>
               ))}
 
               <Divider sx={{ my: 3 }} />
 
-              {/* ビデオ設定 */}
+              {/* グローバル設定（デフォルト設定） */}
               <Typography variant="h6" gutterBottom>
+                グローバル設定（デフォルト）
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                これらの設定は全エンドポイントのデフォルトとして使用されます。個別設定が指定されていないエンドポイントに適用されます。
+              </Typography>
+
+              {/* ビデオ設定 */}
+              <Typography variant="subtitle1" gutterBottom>
                 ビデオ設定
               </Typography>
               <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -493,7 +675,7 @@ function NewStreamsPage() {
               </Grid>
 
               {/* オーディオ設定 */}
-              <Typography variant="h6" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom>
                 オーディオ設定
               </Typography>
               <Grid container spacing={2}>

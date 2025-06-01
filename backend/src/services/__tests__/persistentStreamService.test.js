@@ -229,4 +229,137 @@ describe('PersistentStreamService', () => {
       expect(SESSION_STATES.ERROR).toBe('error');
     });
   });
+
+  describe('エンドポイント設定マージ', () => {
+    test('グローバル設定をデフォルトとして使用', () => {
+      const globalSettings = {
+        videoCodec: 'libx264',
+        videoBitrate: '2000k',
+        fps: 30,
+      };
+
+      const result = service.mergeEndpointSettings(globalSettings, null);
+
+      expect(result.videoCodec).toBe('libx264');
+      expect(result.videoBitrate).toBe('2000k');
+      expect(result.fps).toBe(30);
+    });
+
+    test('エンドポイント設定でグローバル設定を上書き', () => {
+      const globalSettings = {
+        videoCodec: 'libx264',
+        videoBitrate: '2000k',
+        fps: 30,
+      };
+
+      const endpointSettings = {
+        videoBitrate: '4000k',
+        fps: 60,
+      };
+
+      const result = service.mergeEndpointSettings(globalSettings, endpointSettings);
+
+      expect(result.videoCodec).toBe('libx264'); // from global
+      expect(result.videoBitrate).toBe('4000k'); // from endpoint
+      expect(result.fps).toBe(60); // from endpoint
+    });
+
+    test('設定がない場合はデフォルト値を使用', () => {
+      const result = service.mergeEndpointSettings(null, null);
+
+      expect(result.videoCodec).toBe('libx264');
+      expect(result.videoBitrate).toBe('2500k');
+      expect(result.audioCodec).toBe('aac');
+      expect(result.audioBitrate).toBe('128k');
+    });
+  });
+
+  describe('FFmpegコマンド構築 - エンドポイント固有設定', () => {
+    test('単一エンドポイントで固有設定のマージが正しく動作', () => {
+      const endpoints = [
+        {
+          url: 'rtmp://test.com/live',
+          streamKey: 'key1',
+          enabled: true,
+          videoSettings: { videoBitrate: '4000k', fps: 60 },
+          audioSettings: { audioBitrate: '192k' },
+        },
+      ];
+
+      const globalSettings = {
+        videoBitrate: '2000k',
+        fps: 30,
+        audioBitrate: '128k',
+      };
+
+      // 設定のマージが正しく動作することをテスト
+      const mergedSettings = service.mergeEndpointSettings(globalSettings, {
+        ...endpoints[0].videoSettings,
+        ...endpoints[0].audioSettings,
+      });
+
+      expect(mergedSettings.videoBitrate).toBe('4000k'); // endpoint setting
+      expect(mergedSettings.fps).toBe(60); // endpoint setting
+      expect(mergedSettings.audioBitrate).toBe('192k'); // endpoint setting
+      expect(mergedSettings.videoCodec).toBe('libx264'); // default setting
+    });
+
+    test('複数エンドポイントで異なる設定のマージ', () => {
+      const globalSettings = {
+        videoBitrate: '2500k',
+        fps: 30,
+        audioBitrate: '128k',
+      };
+
+      // 高品質エンドポイント
+      const hqSettings = service.mergeEndpointSettings(globalSettings, {
+        videoBitrate: '6000k',
+        fps: 60,
+        audioBitrate: '320k',
+      });
+
+      // 低品質エンドポイント
+      const lqSettings = service.mergeEndpointSettings(globalSettings, {
+        videoBitrate: '1000k',
+        fps: 30,
+        audioBitrate: '96k',
+      });
+
+      // 高品質設定の確認
+      expect(hqSettings.videoBitrate).toBe('6000k');
+      expect(hqSettings.fps).toBe(60);
+      expect(hqSettings.audioBitrate).toBe('320k');
+
+      // 低品質設定の確認
+      expect(lqSettings.videoBitrate).toBe('1000k');
+      expect(lqSettings.fps).toBe(30);
+      expect(lqSettings.audioBitrate).toBe('96k');
+    });
+
+    test('一部設定なしのエンドポイント（グローバル設定使用）', () => {
+      const globalSettings = {
+        videoBitrate: '2500k',
+        fps: 30,
+        audioBitrate: '128k',
+      };
+
+      // ビデオ設定のみカスタム
+      const videoOnlySettings = service.mergeEndpointSettings(globalSettings, {
+        videoBitrate: '4000k',
+      });
+
+      // オーディオ設定のみカスタム
+      const audioOnlySettings = service.mergeEndpointSettings(globalSettings, {
+        audioBitrate: '256k',
+      });
+
+      // ビデオのみカスタムの場合
+      expect(videoOnlySettings.videoBitrate).toBe('4000k'); // custom
+      expect(videoOnlySettings.audioBitrate).toBe('128k'); // global
+
+      // オーディオのみカスタムの場合
+      expect(audioOnlySettings.videoBitrate).toBe('2500k'); // global
+      expect(audioOnlySettings.audioBitrate).toBe('256k'); // custom
+    });
+  });
 });
