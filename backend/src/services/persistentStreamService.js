@@ -39,6 +39,11 @@ class PersistentStreamService {
     this.reconnectAttempts = new Map();
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 10000; // 10秒
+
+    // 初回起動時にデフォルト画像を再生成（新しいデザインに更新）
+    this.recreateDefaultStandbyImage().catch((err) => {
+      logger.warn('Failed to recreate default standby image on startup:', err);
+    });
   }
 
   /**
@@ -139,6 +144,24 @@ class PersistentStreamService {
   }
 
   /**
+   * デフォルト静止画を強制的に再生成
+   */
+  async recreateDefaultStandbyImage() {
+    const defaultPath = path.join(getCacheDir(), 'standby', 'default.jpg');
+    try {
+      // 既存のファイルを削除
+      if (fs.existsSync(defaultPath)) {
+        await fs.unlink(defaultPath);
+      }
+      // 新しく生成
+      await this.createDefaultStandbyImage();
+      logger.info('Default standby image recreated successfully');
+    } catch (error) {
+      logger.error(`Failed to recreate default standby image: ${error.message}`);
+    }
+  }
+
+  /**
    * デフォルト静止画の作成
    */
   async createDefaultStandbyImage() {
@@ -148,15 +171,42 @@ class PersistentStreamService {
     try {
       await fs.ensureDir(standbyDir);
 
-      // FFmpegを使用して単色の静止画を生成
+      // FFmpegを使用して優しい色の静止画を生成
       await new Promise((resolve, reject) => {
+        // 優しいブルーグレーの背景色 (#7E9DB8)
+        const backgroundColor = '7E9DB8';
+        const textColor = 'FFFFFF';
+
+        // フィルターコマンドで背景と文字を生成
+        const filterComplex = [
+          `color=${backgroundColor}:size=1920x1080:duration=1[bg]`,
+          // 日本語フォントを指定し、中央に配信準備中のテキストを配置
+          `[bg]drawtext=text='配信準備中':fontsize=80:fontcolor=${textColor}:x=(w-text_w)/2:y=(h-text_h)/2-50:font=Hiragino Sans`,
+          // 英語テキストも追加
+          `drawtext=text='Stream Standby':fontsize=60:fontcolor=${textColor}:x=(w-text_w)/2:y=(h-text_h)/2+50:font=Arial`,
+        ].join(',');
+
         ffmpeg()
-          .input('color=black:size=1920x1080:duration=1')
+          .input('color=white:size=1920x1080:duration=1')
           .inputOptions(['-f', 'lavfi'])
+          .complexFilter(filterComplex)
           .outputOptions(['-vframes', '1', '-y'])
           .output(defaultPath)
           .on('end', resolve)
-          .on('error', reject)
+          .on('error', (err) => {
+            // フォントエラーの場合は、シンプルな色のみの画像を生成
+            logger.warn(
+              `Failed to create image with text: ${err.message}. Creating simple colored image.`
+            );
+            ffmpeg()
+              .input(`color=${backgroundColor}:size=1920x1080:duration=1`)
+              .inputOptions(['-f', 'lavfi'])
+              .outputOptions(['-vframes', '1', '-y'])
+              .output(defaultPath)
+              .on('end', resolve)
+              .on('error', reject)
+              .run();
+          })
           .run();
       });
 
