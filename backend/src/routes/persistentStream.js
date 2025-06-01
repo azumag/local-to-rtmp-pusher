@@ -43,12 +43,20 @@ const initializeRtmpConfig = async () => {
             url: '',
             streamKey: '',
             enabled: false,
+            // Optional per-endpoint encoding settings
+            // If not specified, global settings will be used
+            videoSettings: null,
+            audioSettings: null,
           },
           {
             name: 'Secondary RTMP',
             url: '',
             streamKey: '',
             enabled: false,
+            // Optional per-endpoint encoding settings
+            // If not specified, global settings will be used
+            videoSettings: null,
+            audioSettings: null,
           },
         ],
         videoSettings: {
