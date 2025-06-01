@@ -401,6 +401,11 @@ function NewStreamsPage() {
                           再接続試行: {sessionStatus.reconnectAttempts}回
                         </Typography>
                       )}
+                      {sessionStatus.status === 'error' && sessionStatus.errorMessage && (
+                        <Typography variant="body2" color="error">
+                          エラー: {sessionStatus.errorMessage}
+                        </Typography>
+                      )}
                     </Box>
                   )}
 
