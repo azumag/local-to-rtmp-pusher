@@ -267,17 +267,15 @@ class PersistentStreamService {
     }
 
     // プレイリストファイルを入力として使用し、concatフォーマットを指定
-    const command = ffmpeg()
-      .inputOptions([
-        '-re', // リアルタイム読み込み
-        '-f',
-        'concat', // concat形式
-        '-safe',
-        '0', // ファイルパスの安全性チェックを無効化
-        '-stream_loop',
-        '-1', // 無限ループ（ファイル終了時に再開）
-      ])
-      .input(playlistPath);
+    const command = ffmpeg().input(playlistPath).inputOptions([
+      '-re', // リアルタイム読み込み
+      '-f',
+      'concat', // concat形式
+      '-safe',
+      '0', // ファイルパスの安全性チェックを無効化
+      '-stream_loop',
+      '-1', // 無限ループ（ファイル終了時に再開）
+    ]);
 
     // 基本的な設定は既存のbuildDualRtmpCommandと同じロジックを流用
     return this.applyEndpointSettings(command, activeEndpoints, globalSettings);
