@@ -433,7 +433,9 @@ class PersistentStreamService {
         startedAt: new Date().toISOString(),
       });
 
-      logger.info(`Session ${sessionId} created with CONNECTING status, waiting for FFmpeg to start`);
+      logger.info(
+        `Session ${sessionId} created with CONNECTING status, waiting for FFmpeg to start`
+      );
 
       // FFmpegプロセスを開始し、成功すればCONNECTED状態に更新
       try {
@@ -441,7 +443,7 @@ class PersistentStreamService {
           ...videoSettings,
           ...audioSettings,
         });
-        
+
         // FFmpegプロセス開始成功後、CONNECTED状態に更新
         await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTED);
         logger.info(`Session ${sessionId} successfully started and set to CONNECTED`);
@@ -474,10 +476,9 @@ class PersistentStreamService {
         const command = this.buildDualRtmpCommand(input, endpoints, settings);
 
         let processStarted = false;
-        let startTimeout;
 
         // タイムアウト設定（3秒でFFmpeg起動失敗とみなす）
-        startTimeout = setTimeout(() => {
+        const startTimeout = setTimeout(() => {
           if (!processStarted) {
             logStream.end();
             reject(new Error('FFmpeg起動がタイムアウトしました（3秒）'));
@@ -489,7 +490,7 @@ class PersistentStreamService {
           .on('start', (commandLine) => {
             processStarted = true;
             clearTimeout(startTimeout);
-            
+
             logger.info(`Session ${sessionId} FFmpeg started with command: ${commandLine}`);
             logStream.write(`Started: ${new Date().toISOString()}\n`);
             logStream.write(`Command: ${commandLine}\n`);
@@ -515,8 +516,8 @@ class PersistentStreamService {
             logStream.write(`Ended: ${new Date().toISOString()}\n`);
             logStream.end();
 
-            await this.updateSessionStatus(sessionId, SESSION_STATES.DISCONNECTED);
-            this.activeSessions.delete(sessionId);
+            // セッションを切断する代わりに、自動的に静止画配信に戻す
+            await this.handleFileStreamEnd(sessionId);
           })
           .on('error', async (err) => {
             logger.error(`Session ${sessionId} error:`, err);
@@ -538,15 +539,26 @@ class PersistentStreamService {
               return;
             }
 
-            await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, err.message);
-            // 再接続を試行
-            await this.handleReconnection(sessionId, err);
+            // ファイル配信中のエラーの場合、静止画に戻すことを試行
+            if (
+              sessionInfo.currentInput &&
+              !sessionInfo.currentInput.includes('standby') &&
+              !sessionInfo.currentInput.includes('default.jpg')
+            ) {
+              logger.info(
+                `File streaming error for session ${sessionId}, attempting to switch back to standby`
+              );
+              await this.handleFileStreamEnd(sessionId);
+            } else {
+              // 静止画配信中のエラーの場合は従来通り再接続を試行
+              await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, err.message);
+              await this.handleReconnection(sessionId, err);
+            }
           });
 
         // ストリーミング開始
         command.run();
         logger.info(`FFmpeg process starting for session ${sessionId}...`);
-
       } catch (error) {
         logger.error(`Error in streaming process for session ${sessionId}:`, error);
         reject(error);
@@ -889,6 +901,57 @@ class PersistentStreamService {
     } catch (error) {
       logger.error(`Error uploading standby image for session ${sessionId}:`, error);
       throw new Error(`静止画のアップロードに失敗しました: ${error.message}`);
+    }
+  }
+
+  /**
+   * ファイル配信終了時の処理 - 自動的に静止画配信に戻す
+   */
+  async handleFileStreamEnd(sessionId) {
+    try {
+      logger.info(`Handling file stream end for session ${sessionId}, switching to standby`);
+
+      // セッション情報を取得
+      const sessionInfo = await this.getSessionInfo(sessionId);
+      if (!sessionInfo) {
+        logger.warn(`Session ${sessionId} not found, cannot switch to standby`);
+        return;
+      }
+
+      // アクティブセッションからプロセス情報を削除
+      this.activeSessions.delete(sessionId);
+
+      // デフォルト静止画パスを取得
+      const standbyPath = sessionInfo.standbyImage || this.getDefaultStandbyImagePath();
+
+      logger.info(`Switching session ${sessionId} back to standby image: ${standbyPath}`);
+
+      // セッション情報を更新
+      await this.saveSessionInfo({
+        id: sessionId,
+        currentInput: standbyPath,
+        status: SESSION_STATES.CONNECTING, // 再起動中
+        lastSwitchAt: new Date().toISOString(),
+      });
+
+      // 静止画配信を開始
+      await this.startStreamingProcess(sessionId, standbyPath, sessionInfo.endpoints, {
+        ...sessionInfo.videoSettings,
+        ...sessionInfo.audioSettings,
+      });
+
+      // 開始成功後、CONNECTED状態に更新
+      await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTED);
+
+      logger.info(
+        `Session ${sessionId} successfully switched back to standby after file stream end`
+      );
+    } catch (error) {
+      logger.error(`Error handling file stream end for session ${sessionId}:`, error);
+
+      // エラーが発生した場合は、セッションをエラー状態に設定し、再接続を試行
+      await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, error.message);
+      await this.handleReconnection(sessionId, error);
     }
   }
 }
