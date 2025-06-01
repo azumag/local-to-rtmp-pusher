@@ -229,4 +229,48 @@ describe('PersistentStreamService', () => {
       expect(SESSION_STATES.ERROR).toBe('error');
     });
   });
+
+  describe('エンドポイント設定マージ', () => {
+    test('グローバル設定をデフォルトとして使用', () => {
+      const globalSettings = {
+        videoCodec: 'libx264',
+        videoBitrate: '2000k',
+        fps: 30,
+      };
+
+      const result = service.mergeEndpointSettings(globalSettings, null);
+
+      expect(result.videoCodec).toBe('libx264');
+      expect(result.videoBitrate).toBe('2000k');
+      expect(result.fps).toBe(30);
+    });
+
+    test('エンドポイント設定でグローバル設定を上書き', () => {
+      const globalSettings = {
+        videoCodec: 'libx264',
+        videoBitrate: '2000k',
+        fps: 30,
+      };
+
+      const endpointSettings = {
+        videoBitrate: '4000k',
+        fps: 60,
+      };
+
+      const result = service.mergeEndpointSettings(globalSettings, endpointSettings);
+
+      expect(result.videoCodec).toBe('libx264'); // from global
+      expect(result.videoBitrate).toBe('4000k'); // from endpoint
+      expect(result.fps).toBe(60); // from endpoint
+    });
+
+    test('設定がない場合はデフォルト値を使用', () => {
+      const result = service.mergeEndpointSettings(null, null);
+
+      expect(result.videoCodec).toBe('libx264');
+      expect(result.videoBitrate).toBe('2500k');
+      expect(result.audioCodec).toBe('aac');
+      expect(result.audioBitrate).toBe('128k');
+    });
+  });
 });
