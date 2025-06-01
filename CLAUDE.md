@@ -1,33 +1,5 @@
 # 開発初期設定
 
-## 概要
-
-このドキュメントでは、効率的で品質の高い開発を行うための基本的なワークフローを定義します。
-ホームディレクトリに配置することで、すべてのプロジェクトで共通のワークフローを適用できます。
-
-## セットアップ方法
-
-### 1. ファイル配置
-
-```bash
-# ホームディレクトリに開発設定ディレクトリを作成
-mkdir -p ~/.dev-config
-
-# このファイルをホームディレクトリに配置
-cp claude.md ~/.dev-config/
-```
-
-### 2. グローバル設定の適用
-
-```bash
-# .bashrc または .zshrc に追加
-echo 'export DEV_CONFIG_PATH="$HOME/.dev-config"' >> ~/.bashrc
-echo 'alias dev-guide="cat $DEV_CONFIG_PATH/claude.md"' >> ~/.bashrc
-
-# 設定を反映
-source ~/.bashrc
-```
-
 ## 開発フロー
 
 ### 1. 実装計画の立案
