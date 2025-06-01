@@ -362,4 +362,72 @@ describe('PersistentStreamService', () => {
       expect(audioOnlySettings.audioBitrate).toBe('256k'); // custom
     });
   });
+
+  describe('プレイリスト機能', () => {
+    beforeEach(() => {
+      // プレイリスト関連のモック
+      jest.mock('../../utils/playlistManager');
+    });
+
+    test('セッション開始時にプレイリストが作成される', async () => {
+      const config = {
+        endpoints: [{ enabled: true, url: 'rtmp://test', streamKey: 'key1' }],
+        standbyImage: '/test/standby.jpg',
+        sessionName: 'Test Playlist Session',
+      };
+
+      const sessionInfo = await service.startSession(config);
+
+      expect(sessionInfo.playlistMode).toBe(true);
+      expect(service.sessionPlaylists.size).toBe(1);
+    });
+
+    test('コンテンツ切り替え時にプレイリストが更新される', async () => {
+      // セッション作成
+      const config = {
+        endpoints: [{ enabled: true, url: 'rtmp://test', streamKey: 'key1' }],
+        standbyImage: '/test/standby.jpg',
+      };
+
+      const sessionInfo = await service.startSession(config);
+      const sessionId = sessionInfo.id;
+
+      // アクティブセッションを模擬
+      service.activeSessions.set(sessionId, {
+        command: { kill: jest.fn() },
+        endpoints: config.endpoints,
+        currentInput: '/test/standby.jpg',
+        settings: {},
+        usePlaylist: true,
+      });
+
+      // プレイリストマネージャーを模擬
+      const mockPlaylistManager = {
+        updatePlaylistSingle: jest.fn().mockResolvedValue('/test/playlist.txt'),
+        getPlaylistPath: jest.fn().mockReturnValue('/test/playlist.txt'),
+      };
+      service.sessionPlaylists.set(sessionId, mockPlaylistManager);
+
+      // コンテンツ切り替え実行
+      const result = await service.switchContent(sessionId, '/test/new-video.mp4');
+
+      expect(result.playlistUpdated).toBe(true);
+      expect(mockPlaylistManager.updatePlaylistSingle).toHaveBeenCalledWith('/test/new-video.mp4');
+    });
+
+    test('セッション停止時にプレイリストがクリーンアップされる', async () => {
+      const sessionId = 'test-session-id';
+      
+      // プレイリストマネージャーを模擬
+      const mockPlaylistManager = {
+        cleanup: jest.fn().mockResolvedValue(),
+      };
+      service.sessionPlaylists.set(sessionId, mockPlaylistManager);
+
+      await service.stopSession(sessionId);
+
+      expect(mockPlaylistManager.cleanup).toHaveBeenCalled();
+      expect(service.sessionPlaylists.has(sessionId)).toBe(false);
+    });
+  });
 });

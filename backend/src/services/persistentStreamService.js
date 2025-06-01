@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const ffmpeg = require('fluent-ffmpeg');
 const { generateUniqueId, getCacheDir, fileExists } = require('../utils/fileUtils');
+const PlaylistManager = require('../utils/playlistManager');
 
 // セッション状態定義
 const SESSION_STATES = {
@@ -36,6 +37,7 @@ class PersistentStreamService {
   constructor() {
     this.activeSessions = new Map();
     this.reconnectAttempts = new Map();
+    this.sessionPlaylists = new Map(); // プレイリスト管理
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 10000; // 10秒
   }
@@ -182,23 +184,30 @@ class PersistentStreamService {
   }
 
   /**
-   * 複数RTMP出力用のFFmpegコマンド構築（エンドポイント毎の設定対応）
+   * 複数RTMP出力用のFFmpegコマンド構築（プレイリスト対応）
    */
-  buildDualRtmpCommand(input, endpoints, globalSettings) {
+  buildDualRtmpCommand(input, endpoints, globalSettings, usePlaylist = false) {
     const activeEndpoints = endpoints.filter((ep) => ep.enabled);
 
     if (activeEndpoints.length === 0) {
       throw new Error('有効なエンドポイントがありません');
     }
 
-    let command = ffmpeg(input);
+    let command;
 
-    // 入力オプション
-    if (input.includes('.jpg') || input.includes('.png')) {
-      // 静止画の場合はループ再生
-      command = ffmpeg().input(input).inputOptions(['-loop', '1', '-re']);
+    if (usePlaylist) {
+      // プレイリストモード - concat demuxerを使用
+      command = ffmpeg()
+        .input(input)
+        .inputOptions(['-f', 'concat', '-safe', '0', '-re']);
     } else {
-      command = ffmpeg(input).inputOptions(['-re']);
+      // 従来モード - 直接ファイル入力
+      if (input.includes('.jpg') || input.includes('.png')) {
+        // 静止画の場合はループ再生
+        command = ffmpeg().input(input).inputOptions(['-loop', '1', '-re']);
+      } else {
+        command = ffmpeg(input).inputOptions(['-re']);
+      }
     }
 
     // 共通オプション
@@ -273,7 +282,7 @@ class PersistentStreamService {
   }
 
   /**
-   * 永続ストリーミングセッションの開始
+   * 永続ストリーミングセッションの開始（プレイリスト方式）
    */
   async startSession(sessionConfig) {
     try {
@@ -300,6 +309,11 @@ class PersistentStreamService {
         throw new Error(`静止画ファイルが見つかりません: ${standbyPath}`);
       }
 
+      // プレイリストマネージャーの初期化
+      const playlistManager = new PlaylistManager(sessionId);
+      await playlistManager.createLoopPlaylist(standbyPath);
+      this.sessionPlaylists.set(sessionId, playlistManager);
+
       // セッション情報を先に保存
       const sessionInfo = await this.saveSessionInfo({
         id: sessionId,
@@ -310,16 +324,17 @@ class PersistentStreamService {
         audioSettings,
         status: SESSION_STATES.CONNECTING,
         currentInput: standbyPath,
+        playlistMode: true, // プレイリストモードを明示
         startedAt: new Date().toISOString(),
       });
 
       // FFmpegコマンドの構築と実行を非同期で開始
       process.nextTick(async () => {
         try {
-          await this.startStreamingProcess(sessionId, standbyPath, activeEndpoints, {
+          await this.startStreamingProcess(sessionId, playlistManager.getPlaylistPath(), activeEndpoints, {
             ...videoSettings,
             ...audioSettings,
-          });
+          }, true); // プレイリストモードを指定
         } catch (error) {
           console.error(`Failed to start streaming process for session ${sessionId}:`, error);
           await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, error.message);
@@ -334,18 +349,18 @@ class PersistentStreamService {
   }
 
   /**
-   * ストリーミングプロセスの開始
+   * ストリーミングプロセスの開始（プレイリスト対応）
    */
-  async startStreamingProcess(sessionId, input, endpoints, settings) {
+  async startStreamingProcess(sessionId, input, endpoints, settings, usePlaylist = false) {
     try {
-      console.log(`Starting streaming process for session: ${sessionId}`);
+      console.log(`Starting streaming process for session: ${sessionId}, playlist mode: ${usePlaylist}`);
 
       const logFile = path.join(getCacheDir('logs'), `session-${sessionId}.log`);
       await fs.ensureDir(path.dirname(logFile));
       const logStream = fs.createWriteStream(logFile);
 
       // FFmpegコマンドの構築
-      const command = this.buildDualRtmpCommand(input, endpoints, settings);
+      const command = this.buildDualRtmpCommand(input, endpoints, settings, usePlaylist);
 
       // イベントハンドラ設定
       command
@@ -366,6 +381,13 @@ class PersistentStreamService {
 
           await this.updateSessionStatus(sessionId, SESSION_STATES.DISCONNECTED);
           this.activeSessions.delete(sessionId);
+
+          // プレイリストのクリーンアップ
+          const playlistManager = this.sessionPlaylists.get(sessionId);
+          if (playlistManager) {
+            await playlistManager.cleanup();
+            this.sessionPlaylists.delete(sessionId);
+          }
         })
         .on('error', async (err) => {
           console.error(`Session ${sessionId} error:`, err);
@@ -386,6 +408,7 @@ class PersistentStreamService {
         endpoints,
         currentInput: input,
         settings,
+        usePlaylist,
         startTime: new Date(),
       });
     } catch (error) {
@@ -454,11 +477,15 @@ class PersistentStreamService {
           const activeSession = this.activeSessions.get(sessionId);
 
           if (sessionInfo && activeSession) {
+            const playlistManager = this.sessionPlaylists.get(sessionId);
+            const inputPath = playlistManager ? playlistManager.getPlaylistPath() : activeSession.currentInput;
+            
             await this.startStreamingProcess(
               sessionId,
-              activeSession.currentInput,
+              inputPath,
               activeSession.endpoints,
-              activeSession.settings
+              activeSession.settings,
+              activeSession.usePlaylist || !!playlistManager
             );
           }
         } catch (reconnectError) {
@@ -472,7 +499,7 @@ class PersistentStreamService {
   }
 
   /**
-   * セッションの停止
+   * セッションの停止（プレイリストクリーンアップ付き）
    */
   async stopSession(sessionId) {
     try {
@@ -490,6 +517,13 @@ class PersistentStreamService {
         }
 
         this.activeSessions.delete(sessionId);
+      }
+
+      // プレイリストのクリーンアップ
+      const playlistManager = this.sessionPlaylists.get(sessionId);
+      if (playlistManager) {
+        await playlistManager.cleanup();
+        this.sessionPlaylists.delete(sessionId);
       }
 
       // セッション情報の更新
@@ -546,7 +580,7 @@ class PersistentStreamService {
   }
 
   /**
-   * コンテンツの切り替え（ファイルまたは静止画）
+   * コンテンツの切り替え（プレイリスト方式 - FFmpegを再起動しない）
    */
   async switchContent(sessionId, newInput, transition = null) {
     try {
@@ -562,15 +596,24 @@ class PersistentStreamService {
 
       console.log(`Switching content for session ${sessionId} to: ${newInput}`);
 
-      // 現在のFFmpegプロセスを停止
-      if (activeSession.command) {
-        activeSession.command.kill('SIGTERM');
+      const playlistManager = this.sessionPlaylists.get(sessionId);
+      if (!playlistManager) {
+        throw new Error('プレイリストマネージャーが見つかりません');
       }
 
-      // セッション状態を更新
+      // セッション状態を更新（接続は維持）
       await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTING);
 
-      // 新しい入力でストリーミングプロセスを再開始
+      // プレイリストを更新（FFmpegは継続実行）
+      if (newInput.includes('.jpg') || newInput.includes('.png')) {
+        // 静止画の場合
+        await playlistManager.createLoopPlaylist(newInput);
+      } else {
+        // 動画ファイルの場合
+        await playlistManager.updatePlaylistSingle(newInput);
+      }
+
+      // 現在の入力を更新
       activeSession.currentInput = newInput;
 
       // トランジション効果の処理（将来の拡張用）
@@ -578,13 +621,6 @@ class PersistentStreamService {
         console.log(`Applying fade transition: ${transition.duration}s`);
         // 今回はシンプルな切り替えを実装、将来的にフェード効果を追加
       }
-
-      await this.startStreamingProcess(
-        sessionId,
-        newInput,
-        activeSession.endpoints,
-        activeSession.settings
-      );
 
       // セッション情報を更新
       const isVideo =
@@ -601,11 +637,14 @@ class PersistentStreamService {
         lastSwitchAt: new Date().toISOString(),
       });
 
+      console.log(`Content switched successfully for session ${sessionId} - FFmpeg session maintained`);
+
       return {
         success: true,
         sessionId,
         newInput,
         status: newStatus,
+        playlistUpdated: true,
       };
     } catch (error) {
       console.error(`Error switching content for session ${sessionId}:`, error);
