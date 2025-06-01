@@ -283,6 +283,12 @@ class PersistentStreamService {
     if (activeEndpoints.length === 1) {
       // 単一出力の場合
       const endpoint = activeEndpoints[0];
+
+      // URLとストリームキーの検証
+      if (!endpoint.url) {
+        throw new Error('RTMPエンドポイントのURLが設定されていません');
+      }
+
       const settings = this.mergeEndpointSettings(globalSettings, {
         ...endpoint.videoSettings,
         ...endpoint.audioSettings,
@@ -302,7 +308,12 @@ class PersistentStreamService {
       command = command.format('flv').output(outputUrl);
     } else {
       // 複数出力の場合 - 各エンドポイントに異なる設定を適用
-      activeEndpoints.forEach((endpoint) => {
+      activeEndpoints.forEach((endpoint, index) => {
+        // URLとストリームキーの検証
+        if (!endpoint.url) {
+          throw new Error(`RTMPエンドポイント${index + 1}のURLが設定されていません`);
+        }
+
         const settings = this.mergeEndpointSettings(globalSettings, {
           ...endpoint.videoSettings,
           ...endpoint.audioSettings,

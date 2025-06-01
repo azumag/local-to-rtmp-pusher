@@ -37,6 +37,7 @@ function LocalFilesPage() {
   // 永続ストリーミング機能
   const {
     currentSession,
+    sessionStatus,
     canSwitchContent,
     switchToFile,
   } = usePersistentStreaming();
@@ -131,9 +132,19 @@ function LocalFilesPage() {
       <Paper
         sx={{ p: 3, mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <Typography variant="body1">
-          動画ファイルをアップロードしてRTMP/SRTで配信することができます。
-        </Typography>
+        <Box>
+          <Typography variant="body1">
+            動画ファイルをアップロードしてRTMP/SRTで配信することができます。
+          </Typography>
+          {currentSession && !canSwitchContent && sessionStatus && (
+            <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
+              {sessionStatus.status === 'connecting' && '配信セッションに接続中です...'}
+              {sessionStatus.status === 'error' && `セッションエラー: ${sessionStatus.errorMessage || 'FFmpegの起動に失敗しました'}`}
+              {sessionStatus.status === 'reconnecting' && '再接続中です...'}
+              {sessionStatus.status === 'disconnected' && 'セッションが切断されています'}
+            </Typography>
+          )}
+        </Box>
 
         <Button
           component="label"
