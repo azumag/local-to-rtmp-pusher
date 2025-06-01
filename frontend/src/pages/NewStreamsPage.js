@@ -471,7 +471,7 @@ function NewStreamsPage() {
                   {/* エンドポイント固有のエンコーディング設定 */}
                   <Accordion>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2">
+                      <Typography variant="body2" component="div">
                         個別エンコーディング設定 
                         {(endpoint.videoSettings || endpoint.audioSettings) && (
                           <Chip size="small" color="primary" label="カスタム" sx={{ ml: 1 }} />

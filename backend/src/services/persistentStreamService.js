@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const ffmpeg = require('fluent-ffmpeg');
 const { generateUniqueId, getCacheDir, fileExists } = require('../utils/fileUtils');
+const logger = require('../utils/logger');
 
 // セッション状態定義
 const SESSION_STATES = {
@@ -50,7 +51,7 @@ class PersistentStreamService {
       }
       return await fs.readJSON(SESSIONS_DB_PATH);
     } catch (error) {
-      console.warn(`Failed to read persistent-sessions.json, recreating: ${error.message}`);
+      logger.warn(`Failed to read persistent-sessions.json, recreating: ${error.message}`);
       const defaultDb = { sessions: [] };
       await writeJSONSafely(SESSIONS_DB_PATH, defaultDb);
       return defaultDb;
@@ -87,7 +88,7 @@ class PersistentStreamService {
       await writeJSONSafely(SESSIONS_DB_PATH, db);
       return existingSession;
     } catch (error) {
-      console.error(`Error saving session info: ${error.message}`);
+      logger.error(`Error saving session info: ${error.message}`);
       throw new Error('セッション情報の保存に失敗しました');
     }
   }
@@ -100,7 +101,7 @@ class PersistentStreamService {
       const db = await this.initializeSessionDb();
       return db.sessions.find((s) => s.id === sessionId) || null;
     } catch (error) {
-      console.error(`Error getting session info: ${error.message}`);
+      logger.error(`Error getting session info: ${error.message}`);
       throw new Error('セッション情報の取得に失敗しました');
     }
   }
@@ -139,9 +140,9 @@ class PersistentStreamService {
           .run();
       });
 
-      console.log(`Default standby image created: ${defaultPath}`);
+      logger.info(`Default standby image created: ${defaultPath}`);
     } catch (error) {
-      console.error(`Failed to create default standby image: ${error.message}`);
+      logger.error(`Failed to create default standby image: ${error.message}`);
     }
   }
 
@@ -277,6 +278,25 @@ class PersistentStreamService {
    */
   async startSession(sessionConfig) {
     try {
+      // Check if FFmpeg is available
+      try {
+        await new Promise((resolve, reject) => {
+          ffmpeg.getAvailableFormats((err, formats) => {
+            if (err) {
+              reject(
+                new Error(
+                  'FFmpeg is not installed or not accessible. Please install FFmpeg to use streaming features.'
+                )
+              );
+            } else {
+              resolve(formats);
+            }
+          });
+        });
+      } catch (ffmpegError) {
+        logger.error('FFmpeg check failed:', ffmpegError);
+        throw ffmpegError;
+      }
       const {
         endpoints,
         standbyImage,
@@ -321,14 +341,14 @@ class PersistentStreamService {
             ...audioSettings,
           });
         } catch (error) {
-          console.error(`Failed to start streaming process for session ${sessionId}:`, error);
+          logger.error(`Failed to start streaming process for session ${sessionId}:`, error);
           await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, error.message);
         }
       });
 
       return sessionInfo;
     } catch (error) {
-      console.error(`Error starting persistent session: ${error.message}`);
+      logger.error(`Error starting persistent session: ${error.message}`);
       throw new Error(`セッションの開始に失敗しました: ${error.message}`);
     }
   }
@@ -338,7 +358,7 @@ class PersistentStreamService {
    */
   async startStreamingProcess(sessionId, input, endpoints, settings) {
     try {
-      console.log(`Starting streaming process for session: ${sessionId}`);
+      logger.info(`Starting streaming process for session: ${sessionId}`);
 
       const logFile = path.join(getCacheDir('logs'), `session-${sessionId}.log`);
       await fs.ensureDir(path.dirname(logFile));
@@ -350,7 +370,7 @@ class PersistentStreamService {
       // イベントハンドラ設定
       command
         .on('start', async (commandLine) => {
-          console.log(`Session ${sessionId} started with command: ${commandLine}`);
+          logger.info(`Session ${sessionId} started with command: ${commandLine}`);
           logStream.write(`Started: ${new Date().toISOString()}\n`);
           logStream.write(`Command: ${commandLine}\n`);
 
@@ -360,7 +380,7 @@ class PersistentStreamService {
           logStream.write(`Progress: ${JSON.stringify(progress)}\n`);
         })
         .on('end', async () => {
-          console.log(`Session ${sessionId} ended`);
+          logger.info(`Session ${sessionId} ended`);
           logStream.write(`Ended: ${new Date().toISOString()}\n`);
           logStream.end();
 
@@ -368,7 +388,7 @@ class PersistentStreamService {
           this.activeSessions.delete(sessionId);
         })
         .on('error', async (err) => {
-          console.error(`Session ${sessionId} error:`, err);
+          logger.error(`Session ${sessionId} error:`, err);
           logStream.write(`Error: ${err.message}\n`);
           logStream.end();
 
@@ -389,7 +409,7 @@ class PersistentStreamService {
         startTime: new Date(),
       });
     } catch (error) {
-      console.error(`Error in streaming process for session ${sessionId}:`, error);
+      logger.error(`Error in streaming process for session ${sessionId}:`, error);
       throw error;
     }
   }
@@ -418,7 +438,7 @@ class PersistentStreamService {
         await this.saveSessionInfo(updateData);
       }
     } catch (error) {
-      console.error(`Error updating session status: ${error.message}`);
+      logger.error(`Error updating session status: ${error.message}`);
     }
   }
 
@@ -430,7 +450,7 @@ class PersistentStreamService {
       const attempts = this.reconnectAttempts.get(sessionId) || 0;
 
       if (attempts >= this.maxReconnectAttempts) {
-        console.log(`Max reconnection attempts reached for session ${sessionId}`);
+        logger.info(`Max reconnection attempts reached for session ${sessionId}`);
         await this.updateSessionStatus(
           sessionId,
           SESSION_STATES.ERROR,
@@ -443,7 +463,7 @@ class PersistentStreamService {
       this.reconnectAttempts.set(sessionId, attempts + 1);
       await this.updateSessionStatus(sessionId, SESSION_STATES.RECONNECTING);
 
-      console.log(
+      logger.info(
         `Attempting reconnection ${attempts + 1}/${this.maxReconnectAttempts} for session ${sessionId}`
       );
 
@@ -462,12 +482,12 @@ class PersistentStreamService {
             );
           }
         } catch (reconnectError) {
-          console.error(`Reconnection failed for session ${sessionId}:`, reconnectError);
+          logger.error(`Reconnection failed for session ${sessionId}:`, reconnectError);
           await this.handleReconnection(sessionId, reconnectError);
         }
       }, this.reconnectDelay);
     } catch (handlingError) {
-      console.error(`Error in reconnection handling: ${handlingError.message}`);
+      logger.error(`Error in reconnection handling: ${handlingError.message}`);
     }
   }
 
@@ -498,7 +518,7 @@ class PersistentStreamService {
 
       return true;
     } catch (error) {
-      console.error(`Error stopping session: ${error.message}`);
+      logger.error(`Error stopping session: ${error.message}`);
       throw new Error('セッションの停止に失敗しました');
     }
   }
@@ -540,7 +560,7 @@ class PersistentStreamService {
           : 0,
       };
     } catch (error) {
-      console.error(`Error getting session status: ${error.message}`);
+      logger.error(`Error getting session status: ${error.message}`);
       throw new Error('セッション状態の取得に失敗しました');
     }
   }
@@ -560,7 +580,7 @@ class PersistentStreamService {
         throw new Error(`入力ファイルが見つかりません: ${newInput}`);
       }
 
-      console.log(`Switching content for session ${sessionId} to: ${newInput}`);
+      logger.info(`Switching content for session ${sessionId} to: ${newInput}`);
 
       // 現在のFFmpegプロセスを停止
       if (activeSession.command) {
@@ -575,7 +595,7 @@ class PersistentStreamService {
 
       // トランジション効果の処理（将来の拡張用）
       if (transition && transition.type === 'fade') {
-        console.log(`Applying fade transition: ${transition.duration}s`);
+        logger.info(`Applying fade transition: ${transition.duration}s`);
         // 今回はシンプルな切り替えを実装、将来的にフェード効果を追加
       }
 
@@ -608,7 +628,7 @@ class PersistentStreamService {
         status: newStatus,
       };
     } catch (error) {
-      console.error(`Error switching content for session ${sessionId}:`, error);
+      logger.error(`Error switching content for session ${sessionId}:`, error);
       await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, error.message);
       throw new Error(`コンテンツの切り替えに失敗しました: ${error.message}`);
     }
@@ -627,7 +647,7 @@ class PersistentStreamService {
       const standbyPath = sessionInfo.standbyImage || this.getDefaultStandbyImagePath();
       return await this.switchContent(sessionId, standbyPath);
     } catch (error) {
-      console.error(`Error switching to standby for session ${sessionId}:`, error);
+      logger.error(`Error switching to standby for session ${sessionId}:`, error);
       throw new Error(`静止画への切り替えに失敗しました: ${error.message}`);
     }
   }
@@ -656,7 +676,7 @@ class PersistentStreamService {
 
       return await this.switchContent(sessionId, filePath);
     } catch (error) {
-      console.error(`Error switching to file for session ${sessionId}:`, error);
+      logger.error(`Error switching to file for session ${sessionId}:`, error);
       throw new Error(`ファイルへの切り替えに失敗しました: ${error.message}`);
     }
   }
@@ -684,7 +704,7 @@ class PersistentStreamService {
         filename,
       };
     } catch (error) {
-      console.error(`Error uploading standby image for session ${sessionId}:`, error);
+      logger.error(`Error uploading standby image for session ${sessionId}:`, error);
       throw new Error(`静止画のアップロードに失敗しました: ${error.message}`);
     }
   }
