@@ -257,6 +257,109 @@ class PersistentStreamService {
   }
 
   /**
+   * プレイリストベースの複数RTMP出力用のFFmpegコマンド構築
+   */
+  buildPlaylistRtmpCommand(playlistPath, endpoints, globalSettings) {
+    const activeEndpoints = endpoints.filter((ep) => ep.enabled);
+
+    if (activeEndpoints.length === 0) {
+      throw new Error('有効なエンドポイントがありません');
+    }
+
+    // プレイリストファイルを入力として使用し、concatフォーマットを指定
+    const command = ffmpeg()
+      .inputOptions([
+        '-re', // リアルタイム読み込み
+        '-f',
+        'concat', // concat形式
+        '-safe',
+        '0', // ファイルパスの安全性チェックを無効化
+        '-stream_loop',
+        '-1', // 無限ループ（ファイル終了時に再開）
+      ])
+      .input(playlistPath);
+
+    // 基本的な設定は既存のbuildDualRtmpCommandと同じロジックを流用
+    return this.applyEndpointSettings(command, activeEndpoints, globalSettings);
+  }
+
+  /**
+   * エンドポイント設定をFFmpegコマンドに適用
+   */
+  applyEndpointSettings(command, activeEndpoints, globalSettings) {
+    let ffmpegCommand = command;
+
+    // 単一出力の場合
+    if (activeEndpoints.length === 1) {
+      const endpoint = activeEndpoints[0];
+
+      // URLとストリームキーの検証
+      if (!endpoint.url) {
+        throw new Error('RTMPエンドポイントのURLが設定されていません');
+      }
+
+      const settings = this.mergeEndpointSettings(globalSettings, {
+        ...endpoint.videoSettings,
+        ...endpoint.audioSettings,
+      });
+
+      ffmpegCommand = ffmpegCommand
+        .videoCodec(settings.videoCodec)
+        .videoBitrate(settings.videoBitrate)
+        .fps(settings.fps)
+        .size(`${settings.videoWidth}x${settings.videoHeight}`)
+        .audioCodec(settings.audioCodec)
+        .audioBitrate(settings.audioBitrate)
+        .audioFrequency(settings.audioSampleRate)
+        .audioChannels(settings.audioChannels);
+
+      const outputUrl = endpoint.streamKey ? `${endpoint.url}/${endpoint.streamKey}` : endpoint.url;
+      ffmpegCommand = ffmpegCommand.format('flv').output(outputUrl);
+    } else {
+      // 複数出力の場合
+      activeEndpoints.forEach((endpoint, index) => {
+        if (!endpoint.url) {
+          throw new Error(`RTMPエンドポイント${index + 1}のURLが設定されていません`);
+        }
+
+        const settings = this.mergeEndpointSettings(globalSettings, {
+          ...endpoint.videoSettings,
+          ...endpoint.audioSettings,
+        });
+
+        const outputUrl = endpoint.streamKey
+          ? `${endpoint.url}/${endpoint.streamKey}`
+          : endpoint.url;
+
+        ffmpegCommand = ffmpegCommand
+          .output(outputUrl)
+          .outputOptions([
+            '-c:v',
+            settings.videoCodec,
+            '-b:v',
+            settings.videoBitrate,
+            '-r',
+            settings.fps.toString(),
+            '-s',
+            `${settings.videoWidth}x${settings.videoHeight}`,
+            '-c:a',
+            settings.audioCodec,
+            '-b:a',
+            settings.audioBitrate,
+            '-ar',
+            settings.audioSampleRate.toString(),
+            '-ac',
+            settings.audioChannels.toString(),
+            '-f',
+            'flv',
+          ]);
+      });
+    }
+
+    return ffmpegCommand;
+  }
+
+  /**
    * 複数RTMP出力用のFFmpegコマンド構築（エンドポイント毎の設定対応）
    */
   buildDualRtmpCommand(input, endpoints, globalSettings) {
@@ -461,108 +564,151 @@ class PersistentStreamService {
   }
 
   /**
-   * ストリーミングプロセスの開始
+   * セッション用のプレイリストファイルを作成
+   */
+  async createPlaylistFile(sessionId, initialInput) {
+    const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
+
+    try {
+      // プレイリストファイルを作成（初期入力で開始）
+      const playlistContent = `file '${initialInput}'\n`;
+      await fs.writeFile(playlistPath, playlistContent, 'utf8');
+
+      logger.info(`Created playlist file for session ${sessionId}: ${playlistPath}`);
+      return playlistPath;
+    } catch (error) {
+      logger.error(`Error creating playlist file for session ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * プレイリストファイルを更新
+   */
+  async updatePlaylistFile(sessionId, newInput) {
+    const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
+
+    try {
+      // 新しいコンテンツでプレイリストを更新
+      const playlistContent = `file '${newInput}'\n`;
+      await fs.writeFile(playlistPath, playlistContent, 'utf8');
+
+      logger.info(`Updated playlist file for session ${sessionId} with: ${newInput}`);
+      return playlistPath;
+    } catch (error) {
+      logger.error(`Error updating playlist file for session ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * プレイリストベースのストリーミングプロセスの開始
    */
   async startStreamingProcess(sessionId, input, endpoints, settings) {
     return new Promise((resolve, reject) => {
-      try {
-        logger.info(`Starting streaming process for session: ${sessionId}`);
+      (async () => {
+        try {
+          logger.info(`Starting playlist-based streaming process for session: ${sessionId}`);
 
-        const logFile = path.join(getCacheDir('logs'), `session-${sessionId}.log`);
-        fs.ensureDirSync(path.dirname(logFile));
-        const logStream = fs.createWriteStream(logFile);
+          const logFile = path.join(getCacheDir('logs'), `session-${sessionId}.log`);
+          fs.ensureDirSync(path.dirname(logFile));
+          const logStream = fs.createWriteStream(logFile);
 
-        // FFmpegコマンドの構築
-        const command = this.buildDualRtmpCommand(input, endpoints, settings);
+          // プレイリストファイルを作成
+          const playlistPath = await this.createPlaylistFile(sessionId, input);
 
-        let processStarted = false;
+          // プレイリストベースのFFmpegコマンドの構築
+          const command = this.buildPlaylistRtmpCommand(playlistPath, endpoints, settings);
 
-        // タイムアウト設定（3秒でFFmpeg起動失敗とみなす）
-        const startTimeout = setTimeout(() => {
-          if (!processStarted) {
-            logStream.end();
-            reject(new Error('FFmpeg起動がタイムアウトしました（3秒）'));
-          }
-        }, 3000);
+          let processStarted = false;
 
-        // イベントハンドラ設定
-        command
-          .on('start', (commandLine) => {
-            processStarted = true;
-            clearTimeout(startTimeout);
+          // タイムアウト設定（3秒でFFmpeg起動失敗とみなす）
+          const startTimeout = setTimeout(() => {
+            if (!processStarted) {
+              logStream.end();
+              reject(new Error('FFmpeg起動がタイムアウトしました（3秒）'));
+            }
+          }, 3000);
 
-            logger.info(`Session ${sessionId} FFmpeg started with command: ${commandLine}`);
-            logStream.write(`Started: ${new Date().toISOString()}\n`);
-            logStream.write(`Command: ${commandLine}\n`);
+          // イベントハンドラ設定
+          command
+            .on('start', (commandLine) => {
+              processStarted = true;
+              clearTimeout(startTimeout);
 
-            // アクティブセッションに追加
-            this.activeSessions.set(sessionId, {
-              command,
-              logStream,
-              endpoints,
-              currentInput: input,
-              settings,
-              startTime: new Date(),
+              logger.info(`Session ${sessionId} FFmpeg started with command: ${commandLine}`);
+              logStream.write(`Started: ${new Date().toISOString()}\n`);
+              logStream.write(`Command: ${commandLine}\n`);
+
+              // アクティブセッションに追加
+              this.activeSessions.set(sessionId, {
+                command,
+                logStream,
+                endpoints,
+                currentInput: input,
+                settings,
+                startTime: new Date(),
+              });
+
+              // FFmpeg開始成功を通知
+              resolve();
+            })
+            .on('progress', (progress) => {
+              logStream.write(`Progress: ${JSON.stringify(progress)}\n`);
+            })
+            .on('end', async () => {
+              logger.info(`Session ${sessionId} ended`);
+              logStream.write(`Ended: ${new Date().toISOString()}\n`);
+              logStream.end();
+
+              // セッションを切断する代わりに、自動的に静止画配信に戻す
+              await this.handleFileStreamEnd(sessionId);
+            })
+            .on('error', async (err) => {
+              logger.error(`Session ${sessionId} error:`, err);
+              logStream.write(`Error: ${err.message}\n`);
+              logStream.end();
+
+              // 開始前のエラーの場合は起動失敗として扱う
+              if (!processStarted) {
+                clearTimeout(startTimeout);
+                reject(err);
+                return;
+              }
+
+              // セッションが既に削除されている場合は再接続しない
+              const sessionInfo = await this.getSessionInfo(sessionId);
+              if (!sessionInfo) {
+                logger.info(`Session ${sessionId} has been deleted, skipping reconnection`);
+                this.activeSessions.delete(sessionId);
+                return;
+              }
+
+              // ファイル配信中のエラーの場合、静止画に戻すことを試行
+              if (
+                sessionInfo.currentInput &&
+                !sessionInfo.currentInput.includes('standby') &&
+                !sessionInfo.currentInput.includes('default.jpg')
+              ) {
+                logger.info(
+                  `File streaming error for session ${sessionId}, attempting to switch back to standby`
+                );
+                await this.handleFileStreamEnd(sessionId);
+              } else {
+                // 静止画配信中のエラーの場合は従来通り再接続を試行
+                await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, err.message);
+                await this.handleReconnection(sessionId, err);
+              }
             });
 
-            // FFmpeg開始成功を通知
-            resolve();
-          })
-          .on('progress', (progress) => {
-            logStream.write(`Progress: ${JSON.stringify(progress)}\n`);
-          })
-          .on('end', async () => {
-            logger.info(`Session ${sessionId} ended`);
-            logStream.write(`Ended: ${new Date().toISOString()}\n`);
-            logStream.end();
-
-            // セッションを切断する代わりに、自動的に静止画配信に戻す
-            await this.handleFileStreamEnd(sessionId);
-          })
-          .on('error', async (err) => {
-            logger.error(`Session ${sessionId} error:`, err);
-            logStream.write(`Error: ${err.message}\n`);
-            logStream.end();
-
-            // 開始前のエラーの場合は起動失敗として扱う
-            if (!processStarted) {
-              clearTimeout(startTimeout);
-              reject(err);
-              return;
-            }
-
-            // セッションが既に削除されている場合は再接続しない
-            const sessionInfo = await this.getSessionInfo(sessionId);
-            if (!sessionInfo) {
-              logger.info(`Session ${sessionId} has been deleted, skipping reconnection`);
-              this.activeSessions.delete(sessionId);
-              return;
-            }
-
-            // ファイル配信中のエラーの場合、静止画に戻すことを試行
-            if (
-              sessionInfo.currentInput &&
-              !sessionInfo.currentInput.includes('standby') &&
-              !sessionInfo.currentInput.includes('default.jpg')
-            ) {
-              logger.info(
-                `File streaming error for session ${sessionId}, attempting to switch back to standby`
-              );
-              await this.handleFileStreamEnd(sessionId);
-            } else {
-              // 静止画配信中のエラーの場合は従来通り再接続を試行
-              await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, err.message);
-              await this.handleReconnection(sessionId, err);
-            }
-          });
-
-        // ストリーミング開始
-        command.run();
-        logger.info(`FFmpeg process starting for session ${sessionId}...`);
-      } catch (error) {
-        logger.error(`Error in streaming process for session ${sessionId}:`, error);
-        reject(error);
-      }
+          // ストリーミング開始
+          command.run();
+          logger.info(`FFmpeg process starting for session ${sessionId}...`);
+        } catch (error) {
+          logger.error(`Error in streaming process for session ${sessionId}:`, error);
+          reject(error);
+        }
+      })();
     });
   }
 
@@ -766,53 +912,35 @@ class PersistentStreamService {
 
       logger.info(`Switching content for session ${sessionId} to: ${newInput}`);
 
-      // 現在のFFmpegプロセスを停止
-      if (activeSession.command) {
-        activeSession.command.kill('SIGTERM');
-      }
+      // プレイリストファイルを更新（FFmpegプロセスは停止せずに継続）
+      await this.updatePlaylistFile(sessionId, newInput);
 
-      // セッション状態をCONNECTINGに更新
-      await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTING);
+      // セッション状態を即座にSTREAMINGに更新（プロセス停止なしなので高速）
+      const newStatus =
+        newInput.includes('standby') || newInput.includes('default.jpg')
+          ? SESSION_STATES.CONNECTED
+          : SESSION_STATES.STREAMING;
 
-      // 新しい入力でストリーミングプロセスを再開始
+      await this.updateSessionStatus(sessionId, newStatus);
+
+      // アクティブセッションの現在入力を更新
       activeSession.currentInput = newInput;
 
       // トランジション効果の処理（将来の拡張用）
       if (transition && transition.type === 'fade') {
         logger.info(`Applying fade transition: ${transition.duration}s`);
-        // 今回はシンプルな切り替えを実装、将来的にフェード効果を追加
+        // プレイリストベースでのフェード効果は将来実装
       }
 
-      try {
-        await this.startStreamingProcess(
-          sessionId,
-          newInput,
-          activeSession.endpoints,
-          activeSession.settings
-        );
+      // セッション情報を更新
+      await this.saveSessionInfo({
+        id: sessionId,
+        currentInput: newInput,
+        status: newStatus,
+        lastSwitchAt: new Date().toISOString(),
+      });
 
-        // FFmpeg開始成功後、適切な状態に更新
-        const isVideo =
-          newInput.includes('.mp4') ||
-          newInput.includes('.avi') ||
-          newInput.includes('.mov') ||
-          newInput.includes('.mkv');
-        const newStatus = isVideo ? SESSION_STATES.STREAMING : SESSION_STATES.CONNECTED;
-
-        await this.updateSessionStatus(sessionId, newStatus);
-        await this.saveSessionInfo({
-          id: sessionId,
-          currentInput: newInput,
-          status: newStatus,
-          lastSwitchAt: new Date().toISOString(),
-        });
-
-        logger.info(`Content switched successfully for session ${sessionId} to ${newStatus} state`);
-      } catch (error) {
-        logger.error(`Failed to start new streaming process for session ${sessionId}:`, error);
-        await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, error.message);
-        throw error;
-      }
+      logger.info(`Content switched successfully for session ${sessionId} to ${newStatus} state`);
 
       // returnの際に現在の状態を確認
       const currentStatus = await this.getSessionStatus(sessionId);
@@ -909,7 +1037,9 @@ class PersistentStreamService {
    */
   async handleFileStreamEnd(sessionId) {
     try {
-      logger.info(`Handling file stream end for session ${sessionId}, switching to standby`);
+      logger.info(
+        `Handling file stream end for session ${sessionId}, switching to standby (playlist-based)`
+      );
 
       // セッション情報を取得
       const sessionInfo = await this.getSessionInfo(sessionId);
@@ -918,33 +1048,34 @@ class PersistentStreamService {
         return;
       }
 
-      // アクティブセッションからプロセス情報を削除
-      this.activeSessions.delete(sessionId);
+      // アクティブセッションを確認
+      const activeSession = this.activeSessions.get(sessionId);
+      if (!activeSession) {
+        logger.warn(`Active session ${sessionId} not found, cannot switch to standby`);
+        return;
+      }
 
       // デフォルト静止画パスを取得
       const standbyPath = sessionInfo.standbyImage || this.getDefaultStandbyImagePath();
 
       logger.info(`Switching session ${sessionId} back to standby image: ${standbyPath}`);
 
-      // セッション情報を更新
+      // プレイリストファイルを更新してスタンバイ画像に切り替え（FFmpegプロセスは継続）
+      await this.updatePlaylistFile(sessionId, standbyPath);
+
+      // アクティブセッションの現在入力を更新
+      activeSession.currentInput = standbyPath;
+
+      // セッション情報とステータスを更新（CONNECTED状態に戻す）
       await this.saveSessionInfo({
         id: sessionId,
         currentInput: standbyPath,
-        status: SESSION_STATES.CONNECTING, // 再起動中
+        status: SESSION_STATES.CONNECTED,
         lastSwitchAt: new Date().toISOString(),
       });
 
-      // 静止画配信を開始
-      await this.startStreamingProcess(sessionId, standbyPath, sessionInfo.endpoints, {
-        ...sessionInfo.videoSettings,
-        ...sessionInfo.audioSettings,
-      });
-
-      // 開始成功後、CONNECTED状態に更新
-      await this.updateSessionStatus(sessionId, SESSION_STATES.CONNECTED);
-
       logger.info(
-        `Session ${sessionId} successfully switched back to standby after file stream end`
+        `Session ${sessionId} successfully switched back to standby after file stream end (playlist-based)`
       );
     } catch (error) {
       logger.error(`Error handling file stream end for session ${sessionId}:`, error);
