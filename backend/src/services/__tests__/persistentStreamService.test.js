@@ -417,7 +417,7 @@ describe('PersistentStreamService', () => {
 
     test('セッション停止時にプレイリストがクリーンアップされる', async () => {
       const sessionId = 'test-session-id';
-      
+
       // プレイリストマネージャーを模擬
       const mockPlaylistManager = {
         cleanup: jest.fn().mockResolvedValue(),

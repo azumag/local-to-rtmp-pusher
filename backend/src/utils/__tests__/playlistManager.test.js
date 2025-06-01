@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs-extra');
-const PlaylistManager = require('../../utils/playlistManager');
-const { getCacheDir } = require('../../utils/fileUtils');
+const PlaylistManager = require('../playlistManager');
+const { getCacheDir } = require('../fileUtils');
 
 // テスト用のモックファイル作成
 const createTestFile = async (filename, content = 'test') => {
@@ -30,7 +30,7 @@ describe('PlaylistManager', () => {
         // ファイルが存在しない場合は無視
       }
     }
-    
+
     // プレイリストのクリーンアップ
     if (playlistManager) {
       await playlistManager.cleanup();
@@ -61,7 +61,7 @@ describe('PlaylistManager', () => {
       const content = await fs.readFile(playlistPath, 'utf8');
       expect(content).toContain(`file '${path.resolve(testFile1).replace(/\\/g, '/')}'`);
       expect(content).toContain(`file '${path.resolve(testFile2).replace(/\\/g, '/')}'`);
-      
+
       const entries = playlistManager.getCurrentEntries();
       expect(entries).toEqual([testFile1, testFile2]);
     });
@@ -69,8 +69,9 @@ describe('PlaylistManager', () => {
     test('存在しないファイルでエラーが発生', async () => {
       const nonExistentFile = path.join(getCacheDir(), 'non-existent.mp4');
 
-      await expect(playlistManager.createPlaylist([nonExistentFile]))
-        .rejects.toThrow('プレイリストのファイルが見つかりません');
+      await expect(playlistManager.createPlaylist([nonExistentFile])).rejects.toThrow(
+        'プレイリストのファイルが見つかりません'
+      );
     });
   });
 
@@ -86,7 +87,7 @@ describe('PlaylistManager', () => {
       const content = await fs.readFile(playlistManager.getPlaylistPath(), 'utf8');
       expect(content).toContain(`file '${path.resolve(testFile1).replace(/\\/g, '/')}'`);
       expect(content).toContain(`file '${path.resolve(testFile2).replace(/\\/g, '/')}'`);
-      
+
       const entries = playlistManager.getCurrentEntries();
       expect(entries).toEqual([testFile1, testFile2]);
     });
@@ -101,7 +102,7 @@ describe('PlaylistManager', () => {
 
       const content = await fs.readFile(playlistPath, 'utf8');
       expect(content).toContain(`file '${path.resolve(testImage).replace(/\\/g, '/')}'`);
-      
+
       const entries = playlistManager.getCurrentEntries();
       expect(entries).toEqual([testImage]);
     });
@@ -119,7 +120,7 @@ describe('PlaylistManager', () => {
       const content = await fs.readFile(playlistManager.getPlaylistPath(), 'utf8');
       expect(content).not.toContain(`file '${path.resolve(testFile1).replace(/\\/g, '/')}'`);
       expect(content).toContain(`file '${path.resolve(testFile2).replace(/\\/g, '/')}'`);
-      
+
       const entries = playlistManager.getCurrentEntries();
       expect(entries).toEqual([testFile2]);
     });

@@ -58,6 +58,7 @@ Thumbs.db
 # Test artifacts
 test-uploads/
 test-data/
+cache/
 
 # Misc
 .cache/

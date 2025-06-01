@@ -197,17 +197,13 @@ class PersistentStreamService {
 
     if (usePlaylist) {
       // プレイリストモード - concat demuxerを使用
-      command = ffmpeg()
-        .input(input)
-        .inputOptions(['-f', 'concat', '-safe', '0', '-re']);
+      command = ffmpeg().input(input).inputOptions(['-f', 'concat', '-safe', '0', '-re']);
+    } else if (input.includes('.jpg') || input.includes('.png')) {
+      // 静止画の場合はループ再生
+      command = ffmpeg().input(input).inputOptions(['-loop', '1', '-re']);
     } else {
       // 従来モード - 直接ファイル入力
-      if (input.includes('.jpg') || input.includes('.png')) {
-        // 静止画の場合はループ再生
-        command = ffmpeg().input(input).inputOptions(['-loop', '1', '-re']);
-      } else {
-        command = ffmpeg(input).inputOptions(['-re']);
-      }
+      command = ffmpeg(input).inputOptions(['-re']);
     }
 
     // 共通オプション
@@ -331,10 +327,16 @@ class PersistentStreamService {
       // FFmpegコマンドの構築と実行を非同期で開始
       process.nextTick(async () => {
         try {
-          await this.startStreamingProcess(sessionId, playlistManager.getPlaylistPath(), activeEndpoints, {
-            ...videoSettings,
-            ...audioSettings,
-          }, true); // プレイリストモードを指定
+          await this.startStreamingProcess(
+            sessionId,
+            playlistManager.getPlaylistPath(),
+            activeEndpoints,
+            {
+              ...videoSettings,
+              ...audioSettings,
+            },
+            true
+          ); // プレイリストモードを指定
         } catch (error) {
           console.error(`Failed to start streaming process for session ${sessionId}:`, error);
           await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, error.message);
@@ -353,7 +355,9 @@ class PersistentStreamService {
    */
   async startStreamingProcess(sessionId, input, endpoints, settings, usePlaylist = false) {
     try {
-      console.log(`Starting streaming process for session: ${sessionId}, playlist mode: ${usePlaylist}`);
+      console.log(
+        `Starting streaming process for session: ${sessionId}, playlist mode: ${usePlaylist}`
+      );
 
       const logFile = path.join(getCacheDir('logs'), `session-${sessionId}.log`);
       await fs.ensureDir(path.dirname(logFile));
@@ -478,8 +482,10 @@ class PersistentStreamService {
 
           if (sessionInfo && activeSession) {
             const playlistManager = this.sessionPlaylists.get(sessionId);
-            const inputPath = playlistManager ? playlistManager.getPlaylistPath() : activeSession.currentInput;
-            
+            const inputPath = playlistManager
+              ? playlistManager.getPlaylistPath()
+              : activeSession.currentInput;
+
             await this.startStreamingProcess(
               sessionId,
               inputPath,
@@ -637,7 +643,9 @@ class PersistentStreamService {
         lastSwitchAt: new Date().toISOString(),
       });
 
-      console.log(`Content switched successfully for session ${sessionId} - FFmpeg session maintained`);
+      console.log(
+        `Content switched successfully for session ${sessionId} - FFmpeg session maintained`
+      );
 
       return {
         success: true,

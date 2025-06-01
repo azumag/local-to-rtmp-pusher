@@ -27,7 +27,7 @@ class PlaylistManager {
    */
   async createPlaylist(filePaths) {
     await this.initialize();
-    
+
     // ファイルの存在確認
     for (const filePath of filePaths) {
       if (!(await fileExists(filePath))) {
@@ -37,7 +37,7 @@ class PlaylistManager {
 
     // プレイリスト形式で書き込み
     const playlistContent = filePaths
-      .map(filePath => {
+      .map((filePath) => {
         // 絶対パスを使用してWindows互換性を確保
         const absolutePath = path.resolve(filePath);
         return `file '${absolutePath.replace(/\\/g, '/')}'`;
@@ -46,10 +46,10 @@ class PlaylistManager {
 
     await fs.writeFile(this.playlistPath, playlistContent, 'utf8');
     this.currentEntries = [...filePaths];
-    
+
     console.log(`Playlist created: ${this.playlistPath}`);
     console.log(`Content:\n${playlistContent}`);
-    
+
     return this.playlistPath;
   }
 
@@ -64,11 +64,11 @@ class PlaylistManager {
 
     const absolutePath = path.resolve(filePath);
     const newEntry = `file '${absolutePath.replace(/\\/g, '/')}'`;
-    
+
     // プレイリストファイルに追記
-    await fs.appendFile(this.playlistPath, '\n' + newEntry, 'utf8');
+    await fs.appendFile(this.playlistPath, `\n${newEntry}`, 'utf8');
     this.currentEntries.push(filePath);
-    
+
     console.log(`Added to playlist: ${filePath}`);
     return this.playlistPath;
   }
@@ -78,7 +78,7 @@ class PlaylistManager {
    * @param {string} filePath - 新しいファイルパス
    */
   async updatePlaylistSingle(filePath) {
-    return await this.createPlaylist([filePath]);
+    return this.createPlaylist([filePath]);
   }
 
   /**
@@ -99,7 +99,7 @@ class PlaylistManager {
    * プレイリストファイルの存在確認
    */
   async exists() {
-    return await fileExists(this.playlistPath);
+    return fileExists(this.playlistPath);
   }
 
   /**
@@ -120,11 +120,10 @@ class PlaylistManager {
   /**
    * ループ再生プレイリストの作成（静止画用）
    * @param {string} imagePath - 静止画ファイルパス
-   * @param {number} duration - 表示時間（秒）
    */
-  async createLoopPlaylist(imagePath, duration = 3600) {
+  async createLoopPlaylist(imagePath) {
     await this.initialize();
-    
+
     if (!(await fileExists(imagePath))) {
       throw new Error(`静止画ファイルが見つかりません: ${imagePath}`);
     }
@@ -132,10 +131,10 @@ class PlaylistManager {
     const absolutePath = path.resolve(imagePath);
     // 静止画をループ再生する設定
     const playlistContent = `file '${absolutePath.replace(/\\/g, '/')}'`;
-    
+
     await fs.writeFile(this.playlistPath, playlistContent, 'utf8');
     this.currentEntries = [imagePath];
-    
+
     console.log(`Loop playlist created: ${this.playlistPath} for ${imagePath}`);
     return this.playlistPath;
   }
