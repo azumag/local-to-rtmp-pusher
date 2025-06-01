@@ -12,26 +12,21 @@ import {
   CardMedia,
 } from '@mui/material';
 import {
-  PlayArrow as PlayIcon,
   Delete as DeleteIcon,
   CloudDownload as DownloadIcon,
   Videocam as VideocamIcon,
   Folder as FolderIcon,
-  FlashOn as FlashOnIcon,
   SendToMobile as SendToStreamIcon,
 } from '@mui/icons-material';
 
 const FileCard = ({
   file,
-  onStream,
-  onQuickStream,
   onDelete,
   onDownload,
   onSendToStream,
   isStreaming = false,
   showDownload = false,
   showDelete = true,
-  showQuickStream = false,
   showSendToStream = false,
   canSendToStream = false,
   cardType = 'local', // 'local' or 'gdrive'
@@ -152,46 +147,18 @@ const FileCard = ({
 
       <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {!isFolder && (
-            <>
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<PlayIcon />}
-                onClick={() => onStream(file)}
-                disabled={isStreaming}
-              >
-                ストリーム
-              </Button>
-
-              {showQuickStream && onQuickStream && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="secondary"
-                  startIcon={<FlashOnIcon />}
-                  onClick={() => onQuickStream(file)}
-                  disabled={isStreaming}
-                  sx={{ minWidth: 'auto' }}
-                >
-                  クイック
-                </Button>
-              )}
-
-              {showSendToStream && onSendToStream && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<SendToStreamIcon />}
-                  onClick={() => onSendToStream(file)}
-                  disabled={!canSendToStream || isStreaming}
-                  title={!canSendToStream ? 'アクティブなセッションがありません' : ''}
-                >
-                  配信に送る
-                </Button>
-              )}
-            </>
+          {!isFolder && showSendToStream && onSendToStream && (
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              startIcon={<SendToStreamIcon />}
+              onClick={() => onSendToStream(file)}
+              disabled={!canSendToStream || isStreaming}
+              title={!canSendToStream ? 'アクティブなセッションがありません' : ''}
+            >
+              配信に送る
+            </Button>
           )}
 
           {showDownload && !isFolder && (
