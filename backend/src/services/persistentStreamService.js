@@ -71,12 +71,15 @@ class PersistentStreamService {
       }
 
       if (existingSession) {
+        // 既存のセッションは、statusがDISCONNECTED以外の場合のみ更新
+        if (existingSession.status === SESSION_STATES.DISCONNECTED) {
+          throw new Error('終了したセッションは更新できません');
+        }
         Object.assign(existingSession, sessionData);
         existingSession.updatedAt = new Date().toISOString();
       } else {
-        const sessionId = generateUniqueId();
         const newSession = {
-          id: sessionId,
+          id: sessionData.id || generateUniqueId(),
           ...sessionData,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -103,6 +106,23 @@ class PersistentStreamService {
     } catch (error) {
       logger.error(`Error getting session info: ${error.message}`);
       throw new Error('セッション情報の取得に失敗しました');
+    }
+  }
+
+  /**
+   * セッション情報の削除
+   */
+  async deleteSessionInfo(sessionId) {
+    try {
+      const db = await this.initializeSessionDb();
+      const index = db.sessions.findIndex((s) => s.id === sessionId);
+
+      if (index !== -1) {
+        db.sessions.splice(index, 1);
+        await writeJSONSafely(SESSIONS_DB_PATH, db);
+      }
+    } catch (error) {
+      logger.error(`Error deleting session info: ${error.message}`);
     }
   }
 
@@ -311,8 +331,23 @@ class PersistentStreamService {
         throw new Error('少なくとも1つのRTMPエンドポイントを有効にしてください');
       }
 
-      // セッションIDの生成
-      const sessionId = generateUniqueId();
+      // 重複しないセッションIDの生成
+      let sessionId;
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      do {
+        sessionId = generateUniqueId();
+        const existingSession = await this.getSessionInfo(sessionId);
+        if (!existingSession) {
+          break;
+        }
+        attempts += 1;
+      } while (attempts < maxAttempts);
+
+      if (attempts >= maxAttempts) {
+        throw new Error('セッションIDの生成に失敗しました');
+      }
 
       // 静止画パスの決定
       const standbyPath = standbyImage || this.getDefaultStandbyImagePath();
@@ -392,6 +427,15 @@ class PersistentStreamService {
           logStream.write(`Error: ${err.message}\n`);
           logStream.end();
 
+          // セッションが既に削除されている場合は再接続しない
+          const sessionInfo = await this.getSessionInfo(sessionId);
+          if (!sessionInfo) {
+            logger.info(`Session ${sessionId} has been deleted, skipping reconnection`);
+            this.activeSessions.delete(sessionId);
+            return;
+          }
+
+          await this.updateSessionStatus(sessionId, SESSION_STATES.ERROR, err.message);
           // 再接続を試行
           await this.handleReconnection(sessionId, err);
         });
@@ -473,6 +517,14 @@ class PersistentStreamService {
           const sessionInfo = await this.getSessionInfo(sessionId);
           const activeSession = this.activeSessions.get(sessionId);
 
+          // セッションが削除されている場合は再接続しない
+          if (!sessionInfo) {
+            logger.info(`Session ${sessionId} has been deleted, stopping reconnection attempts`);
+            this.reconnectAttempts.delete(sessionId);
+            this.activeSessions.delete(sessionId);
+            return;
+          }
+
           if (sessionInfo && activeSession) {
             await this.startStreamingProcess(
               sessionId,
@@ -480,6 +532,8 @@ class PersistentStreamService {
               activeSession.endpoints,
               activeSession.settings
             );
+            // 再接続成功時はカウンターをリセット
+            this.reconnectAttempts.delete(sessionId);
           }
         } catch (reconnectError) {
           logger.error(`Reconnection failed for session ${sessionId}:`, reconnectError);
@@ -515,6 +569,9 @@ class PersistentStreamService {
       // セッション情報の更新
       await this.updateSessionStatus(sessionId, SESSION_STATES.DISCONNECTED);
       this.reconnectAttempts.delete(sessionId);
+
+      // セッション情報をデータベースから削除
+      await this.deleteSessionInfo(sessionId);
 
       return true;
     } catch (error) {
