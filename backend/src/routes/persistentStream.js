@@ -291,6 +291,42 @@ router.post('/content/upload', upload.single('image'), async (req, res, next) =>
   }
 });
 
+/**
+ * 一時的な静止画アップロード（セッション開始前用）
+ * POST /api/stream/content/upload-temp
+ */
+router.post('/content/upload-temp', upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: '画像ファイルが必要です',
+      });
+    }
+
+    logger.info(`Uploading temporary standby image: ${req.file.originalname}`);
+
+    // 一時ファイルとして保存
+    const tempDir = path.join(getCacheDir('standby'), 'temp');
+    await fs.ensureDir(tempDir);
+
+    const fileExt = path.extname(req.file.originalname);
+    const tempFileName = `temp-${Date.now()}${fileExt}`;
+    const tempFilePath = path.join(tempDir, tempFileName);
+
+    await fs.writeFile(tempFilePath, req.file.buffer);
+
+    logger.info(`Temporary standby image saved: ${tempFilePath}`);
+    res.status(200).json({
+      message: '一時的な静止画がアップロードされました',
+      path: tempFilePath,
+      filename: tempFileName,
+    });
+  } catch (error) {
+    logger.error(`Error uploading temporary standby image: ${error.message}`);
+    next(error);
+  }
+});
+
 // ==================== 設定管理API ====================
 
 /**
