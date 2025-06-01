@@ -28,9 +28,6 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     volumes:
       - streamcaster-cache:/app/cache
-    depends_on:
-      streamcaster-rtmp:
-        condition: service_healthy
     networks:
       - streamcaster-network
     restart: unless-stopped
@@ -52,6 +49,9 @@ services:
     ports:
       - '1935:1935' # RTMP
       - '8000:8000' # HTTP
+    depends_on:
+      streamcaster-backend:
+        condition: service_healthy
     networks:
       - streamcaster-network
     restart: unless-stopped
