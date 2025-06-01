@@ -32,6 +32,7 @@ import {
   PhotoCamera as PhotoCameraIcon,
   ExpandMore as ExpandMoreIcon,
   Refresh as RefreshIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material';
 import { usePersistentStreaming } from '../hooks/usePersistentStreaming';
 
@@ -379,6 +380,15 @@ function NewStreamsPage() {
                       color={getStatusColor(sessionStatus?.status)}
                       size="small"
                     />
+                    {sessionStatus?.isStandbyImage && (
+                      <Chip
+                        icon={<ImageIcon />}
+                        label="静止画"
+                        size="small"
+                        variant="outlined"
+                        sx={{ ml: 1 }}
+                      />
+                    )}
                   </Box>
 
                   {sessionStatus && (
@@ -439,13 +449,32 @@ function NewStreamsPage() {
 
               {canSwitchContent ? (
                 <Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    現在:{' '}
-                    {sessionStatus?.currentInput?.includes('.jpg') ||
-                    sessionStatus?.currentInput?.includes('.png')
-                      ? '静止画'
-                      : 'ファイル'}
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    現在のコンテンツ: {sessionStatus?.isStandbyImage ? '静止画' : 'ファイル'}
                   </Typography>
+                  
+                  {sessionStatus?.isStandbyImage && sessionStatus?.standbyImageName && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        静止画: {sessionStatus.standbyImageName}
+                      </Typography>
+                      {currentSession && (
+                        <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1, maxWidth: 200 }}>
+                          <img
+                            src={`/api/stream/standby/${currentSession.id}`}
+                            alt="現在の静止画"
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  )}
 
                   <Alert severity="info" sx={{ mb: 2 }}>
                     ファイルページでファイルを選択して配信に送ることができます
