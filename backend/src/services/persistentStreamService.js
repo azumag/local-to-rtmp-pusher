@@ -274,7 +274,9 @@ class PersistentStreamService {
       'concat', // concat形式
       '-safe',
       '0', // ファイルパスの安全性チェックを無効化
-      // Note: -stream_loop -1 を削除し、代わりにプレイリストに複数のエントリを追加する
+      '-stream_loop',
+      '-1', // プレイリスト全体を無限ループ
+      // Note: プレイリストファイルの動的更新には制限があるため、十分に長いプレイリストを作成
     ]);
 
     // 共通オプション（再接続設定）を追加
@@ -605,7 +607,7 @@ class PersistentStreamService {
   }
 
   /**
-   * プレイリストファイルを更新
+   * プレイリストファイルを更新 - より確実な動的切り替えのために
    */
   async updatePlaylistFile(sessionId, newInput) {
     const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
@@ -621,8 +623,8 @@ class PersistentStreamService {
         );
         inputPath = await convertImageToLoopVideo(newInput, sessionId);
 
-        // 静止画の場合は複数回繰り返し
-        for (let i = 0; i < 10; i += 1) {
+        // 静止画の場合は長時間のループを作成（60回 = 5分間）
+        for (let i = 0; i < 60; i += 1) {
           playlistContent += `file '${inputPath}'\n`;
         }
       } else {
@@ -636,17 +638,22 @@ class PersistentStreamService {
           standbyLoopPath = await convertImageToLoopVideo(standbyPath, `${sessionId}-standby`);
         }
 
-        // 動画ファイルを1回再生し、その後静止画をループ
+        // 動画ファイルを1回再生し、その後静止画を長時間ループ
         playlistContent = `file '${inputPath}'\n`;
-        // 静止画を複数回追加
-        for (let i = 0; i < 10; i += 1) {
+        // 静止画を多数回追加（60回 = 5分間）
+        for (let i = 0; i < 60; i += 1) {
           playlistContent += `file '${standbyLoopPath}'\n`;
         }
       }
 
-      await fs.writeFile(playlistPath, playlistContent, 'utf8');
+      // プレイリストファイルを原子的に更新（一時ファイル経由）
+      const tempPlaylistPath = `${playlistPath}.tmp`;
+      await fs.writeFile(tempPlaylistPath, playlistContent, 'utf8');
+      await fs.move(tempPlaylistPath, playlistPath, { overwrite: true });
 
-      logger.info(`Updated playlist file for session ${sessionId} with: ${inputPath}`);
+      logger.info(
+        `Updated playlist file for session ${sessionId} with: ${inputPath} (atomic update)`
+      );
       return playlistPath;
     } catch (error) {
       logger.error(`Error updating playlist file for session ${sessionId}:`, error);
@@ -667,8 +674,13 @@ class PersistentStreamService {
           fs.ensureDirSync(path.dirname(logFile));
           const logStream = fs.createWriteStream(logFile);
 
-          // プレイリストファイルを作成
-          const playlistPath = await this.createPlaylistFile(sessionId, input);
+          // プレイリストファイルのパスを取得（既存の場合は再利用）
+          const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
+
+          // プレイリストファイルが存在しない場合のみ作成
+          if (!(await fileExists(playlistPath))) {
+            await this.createPlaylistFile(sessionId, input);
+          }
 
           // プレイリストベースのFFmpegコマンドの構築
           const command = this.buildPlaylistRtmpCommand(playlistPath, endpoints, settings);
@@ -952,9 +964,9 @@ class PersistentStreamService {
   }
 
   /**
-   * コンテンツの切り替え（ファイルまたは静止画）
+   * コンテンツの切り替え（ファイルまたは静止画）- FFmpegプロセスを維持して継続性を保つ
    */
-  async switchContent(sessionId, newInput, transition = null) {
+  async switchContent(sessionId, newInput) {
     try {
       const activeSession = this.activeSessions.get(sessionId);
       if (!activeSession) {
@@ -966,27 +978,21 @@ class PersistentStreamService {
         throw new Error(`入力ファイルが見つかりません: ${newInput}`);
       }
 
-      logger.info(`Switching content for session ${sessionId} to: ${newInput}`);
+      logger.info(
+        `Switching content for session ${sessionId} to: ${newInput} (maintaining stream continuity)`
+      );
 
-      // プレイリストファイルを更新（FFmpegプロセスは停止せずに継続）
-      await this.updatePlaylistFile(sessionId, newInput);
-
-      // セッション状態を即座にSTREAMINGに更新（プロセス停止なしなので高速）
+      // セッション状態を更新
       const newStatus =
         newInput.includes('standby') || newInput.includes('default.jpg')
           ? SESSION_STATES.CONNECTED
           : SESSION_STATES.STREAMING;
 
-      await this.updateSessionStatus(sessionId, newStatus);
+      // プレイリストファイルを動的に更新（FFmpegプロセスは継続）
+      await this.updatePlaylistFile(sessionId, newInput);
 
       // アクティブセッションの現在入力を更新
       activeSession.currentInput = newInput;
-
-      // トランジション効果の処理（将来の拡張用）
-      if (transition && transition.type === 'fade') {
-        logger.info(`Applying fade transition: ${transition.duration}s`);
-        // プレイリストベースでのフェード効果は将来実装
-      }
 
       // セッション情報を更新
       await this.saveSessionInfo({
@@ -996,7 +1002,9 @@ class PersistentStreamService {
         lastSwitchAt: new Date().toISOString(),
       });
 
-      logger.info(`Content switched successfully for session ${sessionId} to ${newStatus} state`);
+      logger.info(
+        `Content switched successfully for session ${sessionId} to ${newStatus} state (stream maintained)`
+      );
 
       // returnの際に現在の状態を確認
       const currentStatus = await this.getSessionStatus(sessionId);
@@ -1129,12 +1137,12 @@ class PersistentStreamService {
   }
 
   /**
-   * ファイル配信終了時の処理 - 自動的に静止画配信に戻す
+   * ファイル配信終了時の処理 - 自動的に静止画配信に戻す（FFmpegプロセス維持）
    */
   async handleFileStreamEnd(sessionId) {
     try {
       logger.info(
-        `Handling file stream end for session ${sessionId}, switching to standby (playlist-based)`
+        `Handling file stream end for session ${sessionId}, switching to standby (maintaining stream)`
       );
 
       // セッション情報を取得
@@ -1154,9 +1162,12 @@ class PersistentStreamService {
       // デフォルト静止画パスを取得
       const standbyPath = sessionInfo.standbyImage || this.getDefaultStandbyImagePath();
 
-      logger.info(`Switching session ${sessionId} back to standby image: ${standbyPath}`);
+      logger.info(
+        `Switching session ${sessionId} back to standby image: ${standbyPath} (no process restart)`
+      );
 
       // プレイリストファイルを更新してスタンバイ画像に切り替え（FFmpegプロセスは継続）
+      // Note: 既存のプレイリストには静止画が既に含まれているので、FFmpegは自然に次の静止画に移行する
       await this.updatePlaylistFile(sessionId, standbyPath);
 
       // アクティブセッションの現在入力を更新
@@ -1171,7 +1182,7 @@ class PersistentStreamService {
       });
 
       logger.info(
-        `Session ${sessionId} successfully switched back to standby after file stream end (playlist-based)`
+        `Session ${sessionId} successfully switched back to standby after file stream end (stream maintained)`
       );
     } catch (error) {
       logger.error(`Error handling file stream end for session ${sessionId}:`, error);
