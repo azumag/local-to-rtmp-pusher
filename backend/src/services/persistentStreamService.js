@@ -274,8 +274,7 @@ class PersistentStreamService {
       'concat', // concat形式
       '-safe',
       '0', // ファイルパスの安全性チェックを無効化
-      '-stream_loop',
-      '-1', // 無限ループ（ファイル終了時に再開）
+      // Note: -stream_loop -1 を削除し、代わりにプレイリストに複数のエントリを追加する
     ]);
 
     // 共通オプション（再接続設定）を追加
@@ -578,15 +577,23 @@ class PersistentStreamService {
 
     try {
       let inputPath = initialInput;
+      let playlistContent = '';
 
       // 静止画の場合はループ動画に変換
       if (initialInput.match(/\.(jpg|jpeg|png|gif)$/i)) {
         logger.info(`Converting static image to loop video for session ${sessionId}`);
         inputPath = await convertImageToLoopVideo(initialInput, sessionId);
+
+        // 静止画の場合は、5秒の動画を繰り返し追加（24時間分 = 17280回）
+        // ただし、実際には動的に更新するので、最初は10回程度で十分
+        for (let i = 0; i < 10; i += 1) {
+          playlistContent += `file '${inputPath}'\n`;
+        }
+      } else {
+        // 動画の場合は1回だけ追加
+        playlistContent = `file '${inputPath}'\n`;
       }
 
-      // プレイリストファイルを作成（初期入力で開始）
-      const playlistContent = `file '${inputPath}'\n`;
       await fs.writeFile(playlistPath, playlistContent, 'utf8');
 
       logger.info(`Created playlist file for session ${sessionId}: ${playlistPath}`);
@@ -605,6 +612,7 @@ class PersistentStreamService {
 
     try {
       let inputPath = newInput;
+      let playlistContent = '';
 
       // 静止画の場合はループ動画に変換
       if (newInput.match(/\.(jpg|jpeg|png|gif)$/i)) {
@@ -612,10 +620,30 @@ class PersistentStreamService {
           `Converting static image to loop video for playlist update in session ${sessionId}`
         );
         inputPath = await convertImageToLoopVideo(newInput, sessionId);
+
+        // 静止画の場合は複数回繰り返し
+        for (let i = 0; i < 10; i += 1) {
+          playlistContent += `file '${inputPath}'\n`;
+        }
+      } else {
+        // 動画の場合は1回だけ追加し、その後静止画に戻る
+        const sessionInfo = await this.getSessionInfo(sessionId);
+        const standbyPath = sessionInfo?.standbyImage || this.getDefaultStandbyImagePath();
+
+        // 静止画をループ動画に変換
+        let standbyLoopPath = standbyPath;
+        if (standbyPath.match(/\.(jpg|jpeg|png|gif)$/i)) {
+          standbyLoopPath = await convertImageToLoopVideo(standbyPath, `${sessionId}-standby`);
+        }
+
+        // 動画ファイルを1回再生し、その後静止画をループ
+        playlistContent = `file '${inputPath}'\n`;
+        // 静止画を複数回追加
+        for (let i = 0; i < 10; i += 1) {
+          playlistContent += `file '${standbyLoopPath}'\n`;
+        }
       }
 
-      // 新しいコンテンツでプレイリストを更新
-      const playlistContent = `file '${inputPath}'\n`;
       await fs.writeFile(playlistPath, playlistContent, 'utf8');
 
       logger.info(`Updated playlist file for session ${sessionId} with: ${inputPath}`);
@@ -678,8 +706,11 @@ class PersistentStreamService {
               // FFmpeg開始成功を通知
               resolve();
             })
-            .on('progress', (progress) => {
+            .on('progress', async (progress) => {
               logStream.write(`Progress: ${JSON.stringify(progress)}\n`);
+
+              // プレイリストの動的更新をチェック
+              await this.checkAndUpdatePlaylist(sessionId, progress);
             })
             .on('end', async () => {
               logger.info(`Session ${sessionId} ended`);
@@ -1054,6 +1085,46 @@ class PersistentStreamService {
     } catch (error) {
       logger.error(`Error uploading standby image for session ${sessionId}:`, error);
       throw new Error(`静止画のアップロードに失敗しました: ${error.message}`);
+    }
+  }
+
+  /**
+   * プレイリストの動的更新をチェック
+   */
+  async checkAndUpdatePlaylist(sessionId, progress) {
+    try {
+      const sessionInfo = await this.getSessionInfo(sessionId);
+      if (!sessionInfo) return;
+
+      // 現在のプレイリストファイルを読み込む
+      const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
+      const playlistContent = await fs.readFile(playlistPath, 'utf8');
+      const lines = playlistContent
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim());
+
+      // 残りのエントリが5個以下になったら、静止画のエントリを追加
+      if (lines.length <= 5 && sessionInfo.currentInput?.match(/\.(jpg|jpeg|png|gif|mp4)$/i)) {
+        const standbyPath = sessionInfo.standbyImage || this.getDefaultStandbyImagePath();
+        let standbyLoopPath = standbyPath;
+
+        if (standbyPath.match(/\.(jpg|jpeg|png|gif)$/i)) {
+          standbyLoopPath = await convertImageToLoopVideo(standbyPath, `${sessionId}-standby`);
+        }
+
+        // 静止画のエントリを追加
+        let newContent = playlistContent;
+        for (let i = 0; i < 10; i += 1) {
+          newContent += `file '${standbyLoopPath}'\n`;
+        }
+
+        await fs.writeFile(playlistPath, newContent, 'utf8');
+        logger.info(`Added more standby entries to playlist for session ${sessionId}`);
+      }
+    } catch (error) {
+      // エラーがあってもストリーミングを継続
+      logger.warn(`Error checking playlist update for session ${sessionId}:`, error);
     }
   }
 
