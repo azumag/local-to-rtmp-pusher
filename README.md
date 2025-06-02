@@ -362,3 +362,43 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [FFmpeg](https://ffmpeg.org/) for media processing
 - [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) for RTMP server
 - [React](https://reactjs.org/) and [Express.js](https://expressjs.com/) for web framework
+
+## 配信プロセスフローチャート
+
+```mermaid
+flowchart TD
+    A[セッション開始] --> B[初期入力の決定]
+    B --> C{静止画？}
+    C -->|Yes| D[静止画をループ動画に変換]
+    C -->|No| E[動画ファイルをそのまま使用]
+    D --> F[プレイリストファイル作成]
+    E --> F
+    F --> G[FFmpegプロセス起動]
+
+    G --> H[プレイリストベースストリーミング開始]
+    H --> I[RTMPエンドポイントへ配信]
+
+    J[ファイル切り替えリクエスト] --> K{新しい入力は静止画？}
+    K -->|Yes| L[静止画をループ動画に変換]
+    K -->|No| M[動画ファイルをそのまま使用]
+    L --> N[プレイリストファイル更新]
+    M --> N
+    N --> O[FFmpegが自動的に新しいコンテンツを読み込み]
+    O --> I
+
+    P[静止画に戻るリクエスト] --> Q[スタンバイ画像をループ動画に変換]
+    Q --> N
+
+    R[ファイル配信終了検知] --> S[自動的に静止画に切り替え]
+    S --> Q
+
+    I --> T{エラー発生？}
+    T -->|Yes| U{ファイル配信中？}
+    U -->|Yes| V[静止画に自動切り替え]
+    U -->|No| W[再接続試行]
+    V --> Q
+    W --> H
+
+    X[セッション終了] --> Y[FFmpegプロセス停止]
+    Y --> Z[リソースクリーンアップ]
+```

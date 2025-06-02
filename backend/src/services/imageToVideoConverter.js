@@ -19,16 +19,22 @@ async function convertImageToLoopVideo(imagePath, sessionId) {
   }
 
   return new Promise((resolve, reject) => {
-    ffmpeg(imagePath)
-      .inputOptions([
-        '-loop',
-        '1', // 画像をループ
-        '-framerate',
-        '1', // 入力フレームレート
-        '-t',
-        '5', // 5秒の動画を作成
-      ])
+    // 静止画を入力として設定
+    const command = ffmpeg(imagePath).inputOptions([
+      '-loop',
+      '1', // 画像をループ
+      '-framerate',
+      '1', // 入力フレームレート
+      '-t',
+      '5', // 5秒の動画を作成
+    ]);
+
+    // 無音のオーディオトラックを追加
+    command
+      .input('anullsrc=channel_layout=stereo:sample_rate=44100')
+      .inputOptions(['-f', 'lavfi', '-t', '5'])
       .videoCodec('libx264')
+      .audioCodec('aac')
       .outputOptions([
         '-pix_fmt',
         'yuv420p', // 互換性のあるピクセルフォーマット
@@ -38,6 +44,7 @@ async function convertImageToLoopVideo(imagePath, sessionId) {
         'ultrafast', // 高速エンコード
         '-crf',
         '23', // 品質設定
+        '-shortest', // 最短の入力ストリームの長さに合わせる
       ])
       .output(videoPath)
       .on('start', (commandLine) => {
