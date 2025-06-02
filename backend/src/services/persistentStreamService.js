@@ -267,7 +267,7 @@ class PersistentStreamService {
       throw new Error('有効なエンドポイントがありません');
     }
 
-    // プレイリストファイルを入力として使用し、concatフォーマットを指定
+    // テストスクリプトで実証された安定した設定を使用
     const command = ffmpeg().input(playlistPath).inputOptions([
       '-re', // リアルタイム読み込み
       '-f',
@@ -275,17 +275,14 @@ class PersistentStreamService {
       '-safe',
       '0', // ファイルパスの安全性チェックを無効化
       '-stream_loop',
-      '-1', // プレイリスト全体を無限ループ
-      // Note: プレイリストファイルの動的更新には制限があるため、十分に長いプレイリストを作成
+      '-1', // 無限ループ（静止画では必要）
     ]);
 
-    // 共通オプション（再接続設定）を追加
+    // テストで実証された再接続設定
     command
       .addOption('-reconnect', '1')
       .addOption('-reconnect_streamed', '1')
-      .addOption('-reconnect_delay_max', '10')
-      .addOption('-rtmp_live', 'live')
-      .addOption('-rtmp_buffer', '1000');
+      .addOption('-reconnect_delay_max', '10');
 
     // 基本的な設定は既存のbuildDualRtmpCommandと同じロジックを流用
     return this.applyEndpointSettings(command, activeEndpoints, globalSettings);
@@ -311,13 +308,15 @@ class PersistentStreamService {
         ...endpoint.audioSettings,
       });
 
+      // テストスクリプトで実証された安定した設定を使用
       ffmpegCommand = ffmpegCommand
         .videoCodec(settings.videoCodec)
+        .audioBitrate(settings.audioBitrate)
+        .addOption('-preset', 'veryfast')
         .videoBitrate(settings.videoBitrate)
         .fps(settings.fps)
         .size(`${settings.videoWidth}x${settings.videoHeight}`)
         .audioCodec(settings.audioCodec)
-        .audioBitrate(settings.audioBitrate)
         .audioFrequency(settings.audioSampleRate)
         .audioChannels(settings.audioChannels);
 
@@ -441,28 +440,25 @@ class PersistentStreamService {
         // 複数出力の場合、各出力に個別の設定を適用
         // 注意: fluent-ffmpegの制限により、複数出力で異なる設定を使用するには
         // より複雑なFFmpegコマンドが必要な場合があります
-        command = command
-          .output(outputUrl)
-          .outputOptions([
-            '-c:v',
-            settings.videoCodec,
-            '-b:v',
-            settings.videoBitrate,
-            '-r',
-            settings.fps.toString(),
-            '-s',
-            `${settings.videoWidth}x${settings.videoHeight}`,
-            '-c:a',
-            settings.audioCodec,
-            '-b:a',
-            settings.audioBitrate,
-            '-ar',
-            settings.audioSampleRate.toString(),
-            '-ac',
-            settings.audioChannels.toString(),
-            '-f',
-            'flv',
-          ]);
+        // テストスクリプトで実証された安定した設定を使用
+        command = command.output(outputUrl).outputOptions([
+          '-c:v',
+          settings.videoCodec,
+          '-c:a',
+          settings.audioCodec,
+          '-preset',
+          'veryfast', // テストで実証された高速エンコード設定
+          '-b:v',
+          settings.videoBitrate,
+          '-b:a',
+          settings.audioBitrate,
+          '-r',
+          settings.fps.toString(),
+          '-s',
+          `${settings.videoWidth}x${settings.videoHeight}`,
+          '-f',
+          'flv',
+        ]);
       });
     }
 
@@ -572,7 +568,7 @@ class PersistentStreamService {
   }
 
   /**
-   * セッション用のプレイリストファイルを作成
+   * セッション用のプレイリストファイルを作成 - テストスクリプトで実証されたシンプルな方式
    */
   async createPlaylistFile(sessionId, initialInput) {
     const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
@@ -585,20 +581,14 @@ class PersistentStreamService {
       if (initialInput.match(/\.(jpg|jpeg|png|gif)$/i)) {
         logger.info(`Converting static image to loop video for session ${sessionId}`);
         inputPath = await convertImageToLoopVideo(initialInput, sessionId);
-
-        // 静止画の場合は、5秒の動画を繰り返し追加（24時間分 = 17280回）
-        // ただし、実際には動的に更新するので、最初は10回程度で十分
-        for (let i = 0; i < 10; i += 1) {
-          playlistContent += `file '${inputPath}'\n`;
-        }
-      } else {
-        // 動画の場合は1回だけ追加
-        playlistContent = `file '${inputPath}'\n`;
       }
+
+      // テストスクリプトと同じシンプルな方式：単一ファイルを指定
+      playlistContent = `file '${inputPath}'\n`;
 
       await fs.writeFile(playlistPath, playlistContent, 'utf8');
 
-      logger.info(`Created playlist file for session ${sessionId}: ${playlistPath}`);
+      logger.info(`Created initial playlist file for session ${sessionId}: ${playlistPath}`);
       return playlistPath;
     } catch (error) {
       logger.error(`Error creating playlist file for session ${sessionId}:`, error);
@@ -607,7 +597,7 @@ class PersistentStreamService {
   }
 
   /**
-   * プレイリストファイルを更新 - より確実な動的切り替えのために
+   * プレイリストファイルを更新 - テストスクリプトで実証されたロジックを使用
    */
   async updatePlaylistFile(sessionId, newInput) {
     const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
@@ -623,12 +613,10 @@ class PersistentStreamService {
         );
         inputPath = await convertImageToLoopVideo(newInput, sessionId);
 
-        // 静止画の場合は長時間のループを作成（60回 = 5分間）
-        for (let i = 0; i < 60; i += 1) {
-          playlistContent += `file '${inputPath}'\n`;
-        }
+        // 静止画の場合は単一ファイルを追加（テストスクリプトと同じ方式）
+        playlistContent = `file '${inputPath}'\n`;
       } else {
-        // 動画の場合は1回だけ追加し、その後静止画に戻る
+        // 動画の場合は1回だけ追加し、その後自動的に静止画に戻る
         const sessionInfo = await this.getSessionInfo(sessionId);
         const standbyPath = sessionInfo?.standbyImage || this.getDefaultStandbyImagePath();
 
@@ -638,12 +626,8 @@ class PersistentStreamService {
           standbyLoopPath = await convertImageToLoopVideo(standbyPath, `${sessionId}-standby`);
         }
 
-        // 動画ファイルを1回再生し、その後静止画を長時間ループ
-        playlistContent = `file '${inputPath}'\n`;
-        // 静止画を多数回追加（60回 = 5分間）
-        for (let i = 0; i < 60; i += 1) {
-          playlistContent += `file '${standbyLoopPath}'\n`;
-        }
+        // 動画ファイルを1回再生し、その後静止画に戻る（テストスクリプト方式）
+        playlistContent = `file '${inputPath}'\nfile '${standbyLoopPath}'\n`;
       }
 
       // プレイリストファイルを原子的に更新（一時ファイル経由）
@@ -652,7 +636,7 @@ class PersistentStreamService {
       await fs.move(tempPlaylistPath, playlistPath, { overwrite: true });
 
       logger.info(
-        `Updated playlist file for session ${sessionId} with: ${inputPath} (atomic update)`
+        `Updated playlist file for session ${sessionId} with: ${inputPath} (simplified atomic update)`
       );
       return playlistPath;
     } catch (error) {
@@ -662,7 +646,7 @@ class PersistentStreamService {
   }
 
   /**
-   * プレイリストベースのストリーミングプロセスの開始
+   * プレイリストベースのストリーミングプロセスの開始 - テストで実証された安定したロジックを使用
    */
   async startStreamingProcess(sessionId, input, endpoints, settings) {
     return new Promise((resolve, reject) => {
