@@ -277,6 +277,14 @@ class PersistentStreamService {
       '-1', // 無限ループ（ファイル終了時に再開）
     ]);
 
+    // 共通オプション（再接続設定）を追加
+    command
+      .addOption('-reconnect', '1')
+      .addOption('-reconnect_streamed', '1')
+      .addOption('-reconnect_delay_max', '10')
+      .addOption('-rtmp_live', 'live')
+      .addOption('-rtmp_buffer', '1000');
+
     // 基本的な設定は既存のbuildDualRtmpCommandと同じロジックを流用
     return this.applyEndpointSettings(command, activeEndpoints, globalSettings);
   }
