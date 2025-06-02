@@ -1,0 +1,16 @@
+FROM alpine:3.18
+
+RUN apk add --no-cache \
+    ffmpeg \
+    bash \
+    nodejs \
+    npm
+
+WORKDIR /app
+
+COPY scripts/ /app/scripts/
+RUN mkdir -p /app/videos /app/playlists
+
+RUN chmod +x /app/scripts/*.sh
+
+CMD ["/bin/bash", "/app/scripts/entrypoint.sh"]
