@@ -3,6 +3,7 @@ const fs = require('fs-extra');
 const ffmpeg = require('fluent-ffmpeg');
 const { generateUniqueId, getCacheDir, fileExists } = require('../utils/fileUtils');
 const logger = require('../utils/logger');
+const { convertImageToLoopVideo } = require('./imageToVideoConverter');
 
 // セッション状態定義
 const SESSION_STATES = {
@@ -576,8 +577,16 @@ class PersistentStreamService {
     const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
 
     try {
+      let inputPath = initialInput;
+
+      // 静止画の場合はループ動画に変換
+      if (initialInput.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        logger.info(`Converting static image to loop video for session ${sessionId}`);
+        inputPath = await convertImageToLoopVideo(initialInput, sessionId);
+      }
+
       // プレイリストファイルを作成（初期入力で開始）
-      const playlistContent = `file '${initialInput}'\n`;
+      const playlistContent = `file '${inputPath}'\n`;
       await fs.writeFile(playlistPath, playlistContent, 'utf8');
 
       logger.info(`Created playlist file for session ${sessionId}: ${playlistPath}`);
@@ -595,11 +604,21 @@ class PersistentStreamService {
     const playlistPath = path.join(getCacheDir(), `session-${sessionId}.txt`);
 
     try {
+      let inputPath = newInput;
+
+      // 静止画の場合はループ動画に変換
+      if (newInput.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        logger.info(
+          `Converting static image to loop video for playlist update in session ${sessionId}`
+        );
+        inputPath = await convertImageToLoopVideo(newInput, sessionId);
+      }
+
       // 新しいコンテンツでプレイリストを更新
-      const playlistContent = `file '${newInput}'\n`;
+      const playlistContent = `file '${inputPath}'\n`;
       await fs.writeFile(playlistPath, playlistContent, 'utf8');
 
-      logger.info(`Updated playlist file for session ${sessionId} with: ${newInput}`);
+      logger.info(`Updated playlist file for session ${sessionId} with: ${inputPath}`);
       return playlistPath;
     } catch (error) {
       logger.error(`Error updating playlist file for session ${sessionId}:`, error);
