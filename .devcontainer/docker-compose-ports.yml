@@ -10,7 +10,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - claude-code-config:/home/node/.config/claude-code
     command: sleep infinity
-    network_mode: host
+    # network_mode: host を削除してポートマッピングを使用
+    ports:
+      - "3000:3000"  # React dev server
+      - "3001:3001"  # Backend API
+      - "8080:8080"  # その他のサービス
     environment:
       - NODE_ENV=development
 

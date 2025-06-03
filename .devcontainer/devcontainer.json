@@ -37,10 +37,13 @@
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    }
   },
   
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "sudo usermod -aG docker $(whoami) && sudo chown $(id -u):$(id -g) /var/run/docker.sock || true && npm install",
   
   "remoteUser": "node"
 }

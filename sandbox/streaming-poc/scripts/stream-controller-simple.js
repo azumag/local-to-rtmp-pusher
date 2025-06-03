@@ -22,7 +22,7 @@ class SimpleStreamController {
     await this.streamVideo('standby.mp4', 10);
     
     // Switch to main content
-    await this.streamVideo('main-content.mp4', 30);
+    await this.streamVideo('main-content.mp4', 10);
     
     // Back to standby
     await this.streamVideo('standby.mp4', 10);
