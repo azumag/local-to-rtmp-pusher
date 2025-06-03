@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  rtmp-server:
+    build:
+      context: rtmp-server
+      dockerfile: Dockerfile
+    container_name: streaming-rtmp-server
+    hostname: rtmp-server
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.5
+    ports:
+      - "1935:1935"  # RTMP port
+      - "8081:8080"   # Stats/monitoring port
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+
+  receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile.receiver
+    container_name: streaming-receiver
+    hostname: receiver
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "1234:1234/udp"
+    volumes:
+      - logs:/app/logs
+      - config:/app/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Tokyo
+      - RTMP_SERVER=${RTMP_SERVER}
+      - STREAM_KEY=${STREAM_KEY}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '${RECEIVER_CPU_LIMIT:-0.5}'
+          memory: ${RECEIVER_MEMORY_LIMIT:-512M}
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+
+  controller:
+    build:
+      context: .
+      dockerfile: Dockerfile.controller
+    container_name: streaming-controller
+    hostname: controller
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.12
+    ports:
+      - "8080:8080"
+    volumes:
+      - videos:/app/videos:ro
+      - logs:/app/logs
+      - config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_API_VERSION=1.41
+      - UDP_TARGET=${UDP_HOST:-172.20.0.10}:${UDP_PORT:-1234}
+      - RTMP_SERVER=${RTMP_SERVER}
+      - STREAM_KEY=${STREAM_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - receiver
+      - rtmp-server
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '${CONTROLLER_CPU_LIMIT:-0.3}'
+          memory: ${CONTROLLER_MEMORY_LIMIT:-256M}
+
+volumes:
+  videos:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./videos
+  logs:
+    driver: local
+  config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./config
+
+networks:
+  streaming-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
