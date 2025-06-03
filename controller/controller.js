@@ -1,0 +1,339 @@
+#!/usr/bin/env node
+
+const express = require('express');
+const path = require('path');
+const fs = require('fs-extra');
+const DockerManager = require('./docker_manager');
+
+// ロガー設定
+const log = {
+    info: (msg) => console.log(`[${new Date().toISOString()}] [INFO] ${msg}`),
+    error: (msg) => console.error(`[${new Date().toISOString()}] [ERROR] ${msg}`),
+    warning: (msg) => console.warn(`[${new Date().toISOString()}] [WARNING] ${msg}`)
+};
+
+const app = express();
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'templates')));
+
+// グローバル状態
+let currentVideo = null;
+let streamStatus = "stopped";
+let dockerManager = null;
+
+// DockerManager初期化
+async function initializeDockerManager() {
+    try {
+        log.info("DockerManager初期化開始...");
+        dockerManager = new DockerManager();
+        await dockerManager.initialize();
+        log.info("DockerManager初期化成功");
+        return true;
+    } catch (error) {
+        log.error(`DockerManager初期化失敗: ${error.message}`);
+        return false;
+    }
+}
+
+// メイン画面
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'templates', 'index.html'));
+});
+
+// 配信状況取得
+app.get('/api/status', async (req, res) => {
+    try {
+        if (!dockerManager) {
+            return res.json({
+                stream_status: "error",
+                current_video: null,
+                error: "DockerManager not initialized"
+            });
+        }
+
+        const receiverStats = await dockerManager.getContainerStats("streaming-receiver");
+        const senderStats = await dockerManager.getSenderStatus();
+        
+        res.json({
+            stream_status: streamStatus,
+            current_video: currentVideo,
+            receiver_stats: receiverStats,
+            sender_stats: senderStats,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        log.error(`Status API error: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 利用可能動画一覧
+app.get('/api/videos', async (req, res) => {
+    try {
+        const videosDir = "/app/videos";
+        const videos = [];
+        
+        if (await fs.pathExists(videosDir)) {
+            const files = await fs.readdir(videosDir);
+            
+            for (const file of files) {
+                if (file.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm)$/)) {
+                    const filePath = path.join(videosDir, file);
+                    const stats = await fs.stat(filePath);
+                    
+                    videos.push({
+                        filename: file,
+                        size: stats.size,
+                        modified: stats.mtime.toISOString()
+                    });
+                }
+            }
+        }
+        
+        res.json({
+            videos: videos.sort((a, b) => a.filename.localeCompare(b.filename)),
+            count: videos.length
+        });
+    } catch (error) {
+        log.error(`Videos API error: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 動画切り替え
+app.post('/api/switch', async (req, res) => {
+    try {
+        if (!dockerManager) {
+            return res.status(500).json({ 
+                success: false, 
+                error: "DockerManager not initialized" 
+            });
+        }
+
+        const { video } = req.body;
+        if (!video) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "video parameter required" 
+            });
+        }
+
+        // ファイル存在確認
+        const videoPath = `/app/videos/${video}`;
+        if (!(await fs.pathExists(videoPath))) {
+            return res.status(404).json({ 
+                success: false, 
+                error: `Video file not found: ${video}` 
+            });
+        }
+
+        // パス検証（セキュリティ）
+        if (video.includes('..') || video.startsWith('/')) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Invalid file path" 
+            });
+        }
+
+        log.info(`動画切り替え開始: ${currentVideo} → ${video}`);
+
+        // 既存のsenderコンテナを停止
+        if (currentVideo) {
+            await dockerManager.stopSender();
+        }
+
+        // 新しいsenderコンテナを起動
+        const result = await dockerManager.startSender(video);
+
+        if (result.success) {
+            currentVideo = video;
+            streamStatus = "streaming";
+            log.info(`動画切り替え完了: ${video}`);
+            
+            res.json({
+                success: true,
+                video: video,
+                message: `Successfully switched to ${video}`
+            });
+        } else {
+            log.error(`動画切り替え失敗: ${result.error}`);
+            res.status(500).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        log.error(`Switch API error: ${error.message}`);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// 配信停止
+app.post('/api/stop', async (req, res) => {
+    try {
+        if (!dockerManager) {
+            return res.status(500).json({ 
+                success: false, 
+                error: "DockerManager not initialized" 
+            });
+        }
+
+        const result = await dockerManager.stopSender();
+
+        if (result.success) {
+            currentVideo = null;
+            streamStatus = "stopped";
+            log.info("配信停止完了");
+            
+            res.json({
+                success: true,
+                message: "Stream stopped successfully"
+            });
+        } else {
+            log.error(`配信停止失敗: ${result.error}`);
+            res.status(500).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        log.error(`Stop API error: ${error.message}`);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// ヘルスチェック
+app.get('/api/health', async (req, res) => {
+    try {
+        if (!dockerManager) {
+            return res.json({
+                status: "error",
+                error: "DockerManager not initialized"
+            });
+        }
+
+        const receiverHealth = await dockerManager.checkReceiverHealth();
+        const senderHealth = await dockerManager.checkSenderHealth();
+
+        res.json({
+            status: (receiverHealth && senderHealth) ? "healthy" : "unhealthy",
+            receiver: receiverHealth,
+            sender: senderHealth,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        log.error(`Health API error: ${error.message}`);
+        res.status(500).json({
+            status: "error",
+            error: error.message
+        });
+    }
+});
+
+// ログ取得
+app.get('/api/logs', async (req, res) => {
+    try {
+        if (!dockerManager) {
+            return res.status(500).json({ error: "DockerManager not initialized" });
+        }
+
+        const logType = req.query.type || 'controller';
+        const lines = parseInt(req.query.lines) || 100;
+
+        let logs;
+        switch (logType) {
+            case 'receiver':
+                logs = await dockerManager.getContainerLogs("streaming-receiver", lines);
+                break;
+            case 'sender':
+                logs = await dockerManager.getSenderLogs(lines);
+                break;
+            default:
+                logs = await dockerManager.getControllerLogs(lines);
+                break;
+        }
+
+        res.json({
+            logs: logs,
+            type: logType,
+            lines: lines
+        });
+    } catch (error) {
+        log.error(`Logs API error: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// エラーハンドラー
+app.use((req, res) => {
+    res.status(404).json({ error: "Endpoint not found" });
+});
+
+app.use((error, req, res, next) => {
+    log.error(`Express error: ${error.message}`);
+    res.status(500).json({ error: "Internal server error" });
+});
+
+// サーバー起動
+async function startServer() {
+    log.info("UDP配信システム制御コントローラー起動中...");
+    
+    // DockerManager初期化
+    const dockerInitialized = await initializeDockerManager();
+    if (!dockerInitialized) {
+        log.warning("DockerManagerの初期化に失敗しましたが、サーバーを起動します");
+    }
+
+    // receiverコンテナの状態確認
+    if (dockerManager) {
+        try {
+            const receiverHealthy = await dockerManager.checkReceiverHealth();
+            if (!receiverHealthy) {
+                log.warning("Receiverコンテナが正常でない可能性があります");
+            }
+        } catch (error) {
+            log.error(`Receiver health check failed: ${error.message}`);
+        }
+    }
+
+    log.info("システム初期化完了");
+
+    const port = process.env.PORT || 8080;
+    app.listen(port, '0.0.0.0', () => {
+        log.info(`サーバーが起動しました: http://0.0.0.0:${port}`);
+        log.info("Web UI: http://localhost:8080");
+    });
+}
+
+// グレースフルシャットダウン
+process.on('SIGTERM', () => {
+    log.info("SIGTERM received, shutting down gracefully");
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    log.info("SIGINT received, shutting down gracefully");
+    process.exit(0);
+});
+
+// 未処理エラーのキャッチ
+process.on('unhandledRejection', (reason, promise) => {
+    log.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
+});
+
+process.on('uncaughtException', (error) => {
+    log.error(`Uncaught Exception: ${error.message}`);
+    process.exit(1);
+});
+
+// サーバー起動
+startServer().catch((error) => {
+    log.error(`Failed to start server: ${error.message}`);
+    process.exit(1);
+});

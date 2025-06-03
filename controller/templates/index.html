@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDP配信システム制御画面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #95a5a6;
+        }
+        
+        .status-indicator.streaming {
+            background-color: #27ae60;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.stopped {
+            background-color: #e74c3c;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .panel h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        
+        .video-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .video-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .video-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .video-item.active {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .video-info {
+            flex: 1;
+        }
+        
+        .video-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .video-details {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn.danger {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .stat-label {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-top: 5px;
+        }
+        
+        .logs-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .log-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .log-output {
+            background: #2c3e50;
+            color: #ecf0f1;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            padding: 15px;
+            border-radius: 5px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .alert {
+            padding: 12px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>UDP配信システム制御画面</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-indicator" id="streamStatus"></div>
+                    <span>配信状況: <strong id="streamStatusText">読み込み中...</strong></span>
+                </div>
+                <div class="status-item">
+                    <span>現在の動画: <strong id="currentVideo">なし</strong></span>
+                </div>
+                <div class="status-item">
+                    <span id="lastUpdate">最終更新: --</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>動画選択</h2>
+                <div id="videoList" class="video-list">
+                    <div style="padding: 20px; text-align: center; color: #7f8c8d;">
+                        動画を読み込み中...
+                    </div>
+                </div>
+                <div class="control-buttons">
+                    <button class="btn" onclick="refreshVideos()">更新</button>
+                    <button class="btn danger" onclick="stopStream()" id="stopBtn" disabled>配信停止</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>システム状況</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Receiver状態</div>
+                        <div class="stat-value" id="receiverStatus">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">CPU使用率</div>
+                        <div class="stat-value" id="cpuUsage">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">メモリ使用率</div>
+                        <div class="stat-value" id="memoryUsage">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Sender数</div>
+                        <div class="stat-value" id="senderCount">--</div>
+                    </div>
+                </div>
+                <div class="control-buttons">
+                    <button class="btn" onclick="refreshStatus()">ステータス更新</button>
+                    <button class="btn" onclick="showHealth()">ヘルスチェック</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="logs-panel">
+            <h2>システムログ</h2>
+            <div class="log-controls">
+                <select id="logType" onchange="refreshLogs()">
+                    <option value="controller">Controller</option>
+                    <option value="receiver">Receiver</option>
+                    <option value="sender">Sender</option>
+                </select>
+                <button class="btn" onclick="refreshLogs()">ログ更新</button>
+                <button class="btn" onclick="clearLogs()">クリア</button>
+            </div>
+            <div class="log-output" id="logOutput">ログを読み込み中...</div>
+        </div>
+    </div>
+
+    <div id="alerts"></div>
+
+    <script>
+        let currentVideoFile = null;
+        let refreshInterval = null;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAll();
+            startAutoRefresh();
+        });
+
+        // 自動更新開始
+        function startAutoRefresh() {
+            refreshInterval = setInterval(refreshStatus, 5000);
+        }
+
+        // 全体更新
+        function refreshAll() {
+            refreshStatus();
+            refreshVideos();
+            refreshLogs();
+        }
+
+        // ステータス更新
+        async function refreshStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                // 配信状況更新
+                const statusIndicator = document.getElementById('streamStatus');
+                const statusText = document.getElementById('streamStatusText');
+                
+                if (data.stream_status === 'streaming') {
+                    statusIndicator.className = 'status-indicator streaming';
+                    statusText.textContent = '配信中';
+                } else {
+                    statusIndicator.className = 'status-indicator stopped';
+                    statusText.textContent = '停止中';
+                }
+                
+                // 現在の動画更新
+                document.getElementById('currentVideo').textContent = data.current_video || 'なし';
+                currentVideoFile = data.current_video;
+                
+                // システム統計更新
+                if (data.receiver_stats) {
+                    document.getElementById('receiverStatus').textContent = data.receiver_stats.status || '--';
+                    document.getElementById('cpuUsage').textContent = data.receiver_stats.cpu_percent ? data.receiver_stats.cpu_percent + '%' : '--';
+                    document.getElementById('memoryUsage').textContent = data.receiver_stats.memory_percent ? data.receiver_stats.memory_percent.toFixed(1) + '%' : '--';
+                }
+                
+                if (data.sender_stats) {
+                    document.getElementById('senderCount').textContent = data.sender_stats.count || '0';
+                }
+                
+                // 停止ボタン状態更新
+                document.getElementById('stopBtn').disabled = data.stream_status !== 'streaming';
+                
+                // 最終更新時刻
+                document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString();
+                
+            } catch (error) {
+                console.error('Status refresh error:', error);
+                showAlert('ステータス更新エラー: ' + error.message, 'error');
+            }
+        }
+
+        // 動画一覧更新
+        async function refreshVideos() {
+            try {
+                const response = await fetch('/api/videos');
+                const data = await response.json();
+                
+                const videoList = document.getElementById('videoList');
+                
+                if (data.videos && data.videos.length > 0) {
+                    videoList.innerHTML = '';
+                    
+                    data.videos.forEach(video => {
+                        const videoItem = document.createElement('div');
+                        videoItem.className = 'video-item';
+                        if (video.filename === currentVideoFile) {
+                            videoItem.classList.add('active');
+                        }
+                        
+                        videoItem.innerHTML = `
+                            <div class="video-info">
+                                <div class="video-name">${video.filename}</div>
+                                <div class="video-details">
+                                    ${formatFileSize(video.size)} • ${formatDate(video.modified)}
+                                </div>
+                            </div>
+                            <button class="btn" onclick="switchVideo('${video.filename}')" 
+                                    ${video.filename === currentVideoFile ? 'disabled' : ''}>
+                                ${video.filename === currentVideoFile ? '配信中' : '選択'}
+                            </button>
+                        `;
+                        
+                        videoList.appendChild(videoItem);
+                    });
+                } else {
+                    videoList.innerHTML = '<div style="padding: 20px; text-align: center; color: #7f8c8d;">動画ファイルが見つかりません</div>';
+                }
+                
+            } catch (error) {
+                console.error('Video refresh error:', error);
+                showAlert('動画一覧更新エラー: ' + error.message, 'error');
+            }
+        }
+
+        // 動画切り替え
+        async function switchVideo(videoFile) {
+            try {
+                showAlert('動画を切り替え中...', 'warning');
+                
+                const response = await fetch('/api/switch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({video: videoFile})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`動画を ${videoFile} に切り替えました`, 'success');
+                    refreshAll();
+                } else {
+                    showAlert('動画切り替えエラー: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Switch video error:', error);
+                showAlert('動画切り替えエラー: ' + error.message, 'error');
+            }
+        }
+
+        // 配信停止
+        async function stopStream() {
+            if (!confirm('配信を停止しますか？')) return;
+            
+            try {
+                showAlert('配信を停止中...', 'warning');
+                
+                const response = await fetch('/api/stop', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('配信を停止しました', 'success');
+                    refreshAll();
+                } else {
+                    showAlert('配信停止エラー: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Stop stream error:', error);
+                showAlert('配信停止エラー: ' + error.message, 'error');
+            }
+        }
+
+        // ログ更新
+        async function refreshLogs() {
+            try {
+                const logType = document.getElementById('logType').value;
+                const response = await fetch(`/api/logs?type=${logType}&lines=100`);
+                const data = await response.json();
+                
+                const logOutput = document.getElementById('logOutput');
+                if (data.logs && Array.isArray(data.logs)) {
+                    logOutput.textContent = data.logs.join('\n');
+                    logOutput.scrollTop = logOutput.scrollHeight;
+                } else {
+                    logOutput.textContent = 'ログデータが取得できませんでした';
+                }
+                
+            } catch (error) {
+                console.error('Log refresh error:', error);
+                document.getElementById('logOutput').textContent = 'ログ取得エラー: ' + error.message;
+            }
+        }
+
+        // ログクリア
+        function clearLogs() {
+            document.getElementById('logOutput').textContent = '';
+        }
+
+        // ヘルスチェック
+        async function showHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                if (data.status === 'healthy') {
+                    showAlert('システムは正常に動作しています', 'success');
+                } else {
+                    showAlert('システムに問題があります: ' + (data.error || 'Unknown error'), 'warning');
+                }
+                
+            } catch (error) {
+                console.error('Health check error:', error);
+                showAlert('ヘルスチェックエラー: ' + error.message, 'error');
+            }
+        }
+
+        // アラート表示
+        function showAlert(message, type = 'info') {
+            const alertsContainer = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            
+            alertsContainer.appendChild(alert);
+            
+            // 5秒後に自動削除
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 5000);
+        }
+
+        // ユーティリティ関数
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ja-JP') + ' ' + date.toLocaleTimeString('ja-JP');
+        }
+
+        // ページ離脱時に自動更新停止
+        window.addEventListener('beforeunload', function() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

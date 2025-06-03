@@ -87,7 +87,8 @@
       "Bash(# 現在のテストストリームを停止\ndocker exec streamcaster-backend pkill -f ffmpeg\n\n# バックエンドコンテナを再起動して変更を反映\ndocker-compose restart streamcaster-backend)",
       "Bash(# バックエンドを再起動\ndocker-compose restart streamcaster-backend\n\n# 少し待ってから新しいセッションを作成\nsleep 10 && curl -X POST http://localhost:3001/api/stream/session/start \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"name\": \"HLS Mode Test\",\n    \"endpoints\": [{\n      \"name\": \"Primary RTMP\",\n      \"url\": \"rtmp://streamcaster-rtmp:1935/live\",\n      \"streamKey\": \"stream\",\n      \"enabled\": true\n    }]\n  }')",
       "Bash(# RTMPサーバーを再起動\ndocker-compose restart streamcaster-rtmp\n\n# 少し待ってからテストストリーム開始\nsleep 10 && docker exec -d streamcaster-backend sh -c 'ffmpeg -re -f lavfi -i \"testsrc=size=1920x1080:rate=30\" -f lavfi -i \"anullsrc=channel_layout=stereo:sample_rate=44100\" -vf \"format=yuv420p\" -c:v libx264 -preset veryfast -b:v 2000k -c:a aac -b:a 128k -ar 44100 -ac 2 -f flv rtmp://streamcaster-rtmp:1935/live/stream')",
-      "Bash(# すべてを停止してクリーンアップ\ndocker-compose down -v\n\n# 再ビルドして起動\ndocker-compose up -d --build)"
+      "Bash(# すべてを停止してクリーンアップ\ndocker-compose down -v\n\n# 再ビルドして起動\ndocker-compose up -d --build)",
+      "Bash(docker inspect:*)"
     ],
     "deny": []
   }

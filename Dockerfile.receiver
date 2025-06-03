@@ -1,0 +1,10 @@
+FROM alpine:latest
+
+RUN apk add --no-cache ffmpeg bash
+
+WORKDIR /app
+
+COPY scripts/receiver-entrypoint.sh /app/receiver-entrypoint.sh
+RUN chmod +x /app/receiver-entrypoint.sh
+
+ENTRYPOINT ["/app/receiver-entrypoint.sh"]
