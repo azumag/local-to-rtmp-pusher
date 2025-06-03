@@ -1,5 +1,18 @@
 # 開発初期設定
 
+## Claude Code CLI設定
+
+### デフォルトフラグの設定
+
+Dev Container内では、`--dangerously-skip-permissions`フラグがデフォルトで有効になっています：
+
+```bash
+# .bashrcに設定済み
+alias claude="claude --dangerously-skip-permissions"
+```
+
+これにより、コンテナ内での権限チェックをバイパスし、スムーズな開発体験を提供します。
+
 ## 開発フロー
 
 ### 1. 実装計画の立案

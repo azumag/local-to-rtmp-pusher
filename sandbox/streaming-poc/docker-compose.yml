@@ -22,9 +22,9 @@ services:
       - ./scripts:/app/scripts
       - ./videos:/app/videos
     environment:
-      - RTMP_URL=rtmp://rtmp-server:1935/live/stream
       - NODE_ENV=development
-      - CONTROLLER_MODE=${CONTROLLER_MODE:-dynamic}
+      - CONTROLLER_MODE=${CONTROLLER_MODE:-simple}
+      - RTMP_URL=${RTMP_URL}
     networks:
       - streaming-network
     restart: unless-stopped

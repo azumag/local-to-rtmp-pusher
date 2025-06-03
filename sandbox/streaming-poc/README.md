@@ -1,69 +1,50 @@
 # FFmpeg Streaming POC
 
-動的プレイリスト更新によるRTMPストリーミングの実証実装です。VLC互換性を考慮したFFmpeg設定により、安定したRTMPストリーミングを実現します。
+動的プレイリスト更新による RTMP ストリーミングの実証実装です。VLC 互換性を考慮した FFmpeg 設定により、安定した RTMP ストリーミングを実現します。
 
 ## 特徴
 
-- FFmpegのconcat demuxerを使用した無限ループ配信
+- FFmpeg の concat demuxer を使用した無限ループ配信
 - 配信を維持したまま動的にプレイリストを更新
-- VLC互換性を考慮したH.264 Baselineプロファイル
-- Node.jsによる配信制御
-- Dockerによる環境構築
+- VLC 互換性を考慮した H.264 Baseline プロファイル
+- Node.js による配信制御
+- Docker による環境構築
 
 ## 構成
 
-- **FFmpegコンテナ**: ストリーミング処理（Alpine + FFmpeg + Node.js）
-- **RTMPサーバー**: nginx-rtmpによるRTMPサーバー
+- **FFmpeg コンテナ**: ストリーミング処理（Alpine + FFmpeg + Node.js）
+- **RTMP サーバー**: nginx-rtmp による RTMP サーバー
 
 ## 動作モード
 
 ### 1. シンプルモード（推奨）
 
-- 個別のFFmpegプロセスによる順次配信
+- 個別の FFmpeg プロセスによる順次配信
 - 安定した動作を実現
-- VLCでの再生確認済み
+- VLC での再生確認済み
 
 ### 2. 動的モード（実験的）
 
-- concat demuxerとプレイリスト更新による無限ループ配信
+- concat demuxer とプレイリスト更新による無限ループ配信
 - 配信継続性の検証用
 
 ## 使用方法
 
-### RTMPストリーミングテスト（推奨）
+### RTMP ストリーミングテスト（推奨）
 
 ```bash
 # シンプルモードでのRTMP配信テスト
 ./test-rtmp-only.sh
 ```
 
-### その他のテストスクリプト
-
-```bash
-# シンプルモードでのテスト
-./test-simple.sh
-
-# 動的モードでのテスト
-./test-stream.sh
-
-# VLC互換性テスト
-./test-vlc.sh
-```
-
 ### ストリーム視聴
 
-**VLCでの視聴（推奨）**
+**VLC での視聴（推奨）**
 
-1. VLCを開く
+1. VLC を開く
 2. `Media` > `Open Network Stream`
 3. URL: `rtmp://localhost:1935/live/stream`
 4. `Play`をクリック
-
-**ffplayでの視聴**
-
-```bash
-ffplay rtmp://localhost:1935/live/stream
-```
 
 ### ストリーミング停止
 
@@ -73,14 +54,14 @@ ffplay rtmp://localhost:1935/live/stream
 
 ## 配信スケジュール
 
-1. **0-10秒**: 青色の待機画面（1920x1080, 30fps）
-2. **10-40秒**: 緑色のメインコンテンツ（1920x1080, 30fps）
-3. **40-50秒**: 青色の待機画面に戻る
-4. **50秒**: 配信終了
+1. **0-10 秒**: 青色の待機画面（1920x1080, 30fps）
+2. **10-40 秒**: 緑色のメインコンテンツ（1920x1080, 30fps）
+3. **40-50 秒**: 青色の待機画面に戻る
+4. **50 秒**: 配信終了
 
 ## 技術詳細
 
-### VLC互換性のための設定
+### VLC 互換性のための設定
 
 ```javascript
 // FFmpeg設定例（stream-controller-simple.js）
@@ -122,9 +103,9 @@ const ffmpegArgs = [
 
 ### プレイリスト更新の仕組み（動的モード）
 
-1. FFmpegは`-stream_loop -1`オプションで無限ループ再生
-2. プレイリストファイルをアトミックに更新（rename操作）
-3. FFmpegは次のループでプレイリストを再読み込み
+1. FFmpeg は`-stream_loop -1`オプションで無限ループ再生
+2. プレイリストファイルをアトミックに更新（rename 操作）
+3. FFmpeg は次のループでプレイリストを再読み込み
 4. 配信ストリームは途切れることなく継続
 
 ### RTMP サーバー設定
@@ -171,9 +152,6 @@ streaming-poc/
 │   └── current.txt             # 動的プレイリスト
 ├── docker-compose.yml          # Docker Compose 設定
 ├── test-rtmp-only.sh          # RTMP専用テスト（推奨）
-├── test-simple.sh             # シンプルモードテスト
-├── test-stream.sh             # 動的モードテスト
-├── test-vlc.sh                # VLC互換性テスト
 ├── check-stream.sh            # ストリーム状態確認
 └── stop-stream.sh             # 配信停止
 ```
@@ -196,15 +174,15 @@ docker logs streaming-rtmp-server
 
 ### よくある問題と解決方法
 
-**VLCで "Input/output error" が発生する場合:**
+**VLC で "Input/output error" が発生する場合:**
 
-- RTMPサーバーが起動しているか確認: `curl http://localhost:8080/stat`
-- ファイアウォール設定の確認: ポート1935と8080が開いているか
-- FFmpegログの確認: `docker logs streaming-ffmpeg`
+- RTMP サーバーが起動しているか確認: `curl http://localhost:8080/stat`
+- ファイアウォール設定の確認: ポート 1935 と 8080 が開いているか
+- FFmpeg ログの確認: `docker logs streaming-ffmpeg`
 
 **動画が生成されない場合:**
 
-- Dockerコンテナ内でFFmpegが正常に動作しているか確認
+- Docker コンテナ内で FFmpeg が正常に動作しているか確認
 - ディスク容量の確認
 - `docker exec streaming-ffmpeg ls -la /app/videos` でファイル存在確認
 
@@ -232,7 +210,7 @@ await this.streamVideo('custom-video.mp4', 30);
 
 ### エンコード設定の調整
 
-`scripts/stream-controller-simple.js`のffmpegArgsを編集：
+`scripts/stream-controller-simple.js`の ffmpegArgs を編集：
 
 ```javascript
 // 解像度の変更
@@ -248,14 +226,14 @@ await this.streamVideo('custom-video.mp4', 30);
 
 ## 応用例
 
-このPOCシステムは以下の用途に展開可能です：
+この POC システムは以下の用途に展開可能です：
 
 - ライブ配信システムのプロトタイプ
 - 動的コンテンツ切り替え機能の検証
-- RTMP配信の負荷テスト
-- FFmpegパラメータの最適化検証
+- RTMP 配信の負荷テスト
+- FFmpeg パラメータの最適化検証
 - 複数エンドポイント同時配信の実装
 
 ## ライセンス
 
-このPOCは実証目的で作成されており、本番環境での使用には追加の考慮が必要です。
+この POC は実証目的で作成されており、本番環境での使用には追加の考慮が必要です。
