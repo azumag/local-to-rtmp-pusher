@@ -1,364 +1,194 @@
-# StreamCaster
+# UDP配信システム (Local-to-RTMP Pusher)
 
-A professional web-based media streaming platform that allows you to stream video files from local storage or Google Drive to RTMP/SRT endpoints using FFmpeg.
+動的動画切り替え可能なUDP→RTMP配信システム
 
-## Features
+## 🚀 クイックスタート
 
-- 📹 Stream local video files to RTMP/SRT endpoints
-- 🌐 Stream from Google Drive shared folders
-- 🎛️ Configurable video/audio codecs and quality settings
-- 🖥️ Modern responsive web interface with horizontal navigation
-- 🐳 Fully containerized with Docker
-- 📊 Real-time stream status monitoring
-- 🚀 Built-in RTMP server for testing
-- 🔥 Hot-reloading development environment
+### 1. システム起動
+```bash
+# 全サービス起動（ローカルRTMPサーバー含む）
+docker-compose up -d
 
-## Architecture
-
-```mermaid
-graph TD
-    subgraph "User"
-        A[Web Browser] --> B[Frontend UI]
-    end
-
-    subgraph "Docker Containers"
-        subgraph "Frontend Container"
-            B[React App]
-        end
-
-        subgraph "Backend Container"
-            C[Express API Server]
-            D[Google Drive Service]
-            E[FFmpeg Stream Manager]
-        end
-
-        subgraph "RTMP Server Container"
-            F[Nginx RTMP Server]
-        end
-    end
-
-    B --> C
-    C --> D
-    C --> E
-    E --> F
-
-    D --> G[Google Drive]
-    F --> H[External Streaming Platforms]
+# ログ確認
+docker-compose logs -f
 ```
 
-## Prerequisites
+### 2. Web UI アクセス
+- 制御画面: http://localhost:8080
+- RTMP統計: http://localhost:8081/stat
 
-- Docker and Docker Compose
-- Node.js 18+ (for development)
-- FFmpeg (included in containers)
-
-## Quick Start
-
-1. Clone the repository:
-
+### 3. 動画ファイル準備
 ```bash
-git clone https://github.com/azumag/streamcaster.git
-cd streamcaster
+# videos/ディレクトリに動画ファイルを配置
+cp your-video.mp4 videos/
 ```
 
-2. Start the application:
+### 4. 配信開始
+1. Web UIで動画ファイルを選択
+2. 「選択」ボタンをクリック
+3. 配信状況を確認
 
+## 📁 システム構成
+
+```
+UDP配信システム
+├── rtmp-server/          # ローカルRTMPサーバー
+├── controller/           # Web UI + API
+├── scripts/             # 運用スクリプト
+├── config/              # 設定ファイル
+├── videos/              # 動画ファイル
+└── logs/                # ログファイル
+```
+
+## 🔧 設定
+
+### ローカルテスト（デフォルト）
 ```bash
+# .env の設定
+RTMP_SERVER=rtmp://rtmp-server:1935/live
+STREAM_KEY=test-stream
+```
+
+### 外部配信（Twitch等）
+```bash
+# .env を編集
+RTMP_SERVER=rtmp://live.twitch.tv/live
+STREAM_KEY=your_actual_stream_key
+
+# 本番環境で起動
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+## 🎮 配信視聴
+
+### VLCで視聴
+1. VLC を開く
+2. `Media` > `Open Network Stream`
+3. URL: `rtmp://localhost:1935/live/test-stream`
+4. `Play` をクリック
+
+### FFplayで視聴
+```bash
+ffplay rtmp://localhost:1935/live/test-stream
+```
+
+## 📊 監視・メンテナンス
+
+### ヘルスチェック
+```bash
+# システム状態確認
+./scripts/health_check.sh
+
+# 連続監視
+./scripts/health_check.sh --watch
+```
+
+### ログ確認
+```bash
+# 全ログ
+docker-compose logs
+
+# 特定サービス
+docker-compose logs receiver
+docker-compose logs rtmp-server
+```
+
+### 手動操作
+```bash
+# Sender起動
+./scripts/start_sender.sh video.mp4
+
+# Sender停止
+./scripts/stop_sender.sh
+
+# 全Sender停止
+./scripts/stop_sender.sh --all
+```
+
+## 🛠️ トラブルシューティング
+
+### よくある問題
+
+**1. 動画が再生されない**
+```bash
+# コンテナ状態確認
+docker-compose ps
+
+# ネットワーク確認
+docker network ls | grep streaming
+```
+
+**2. Web UIにアクセスできない**
+```bash
+# ポート確認
+netstat -tlnp | grep 8080
+
+# コントローラーログ確認
+docker-compose logs controller
+```
+
+**3. RTMPストリームが開始されない**
+```bash
+# RTMPサーバー状態確認
+curl http://localhost:8081/stat
+
+# Receiverログ確認
+docker-compose logs receiver
+```
+
+### リセット方法
+```bash
+# 全停止・削除
+docker-compose down -v
+
+# イメージ再ビルド
+docker-compose build --no-cache
+
+# クリーン起動
 docker-compose up -d
 ```
 
-3. Access the web interface:
+## 📈 パフォーマンス
 
-- Frontend: http://localhost:8080
-- Backend API: http://localhost:3001
-- RTMP Server: rtmp://localhost:1935/live
+### 推奨スペック
+- CPU: 2コア以上
+- メモリ: 2GB以上
+- ディスク: 10GB以上の空き容量
 
-## Development Setup
+### リソース使用量
+- Receiver: CPU 5-15%, メモリ 50-100MB
+- Controller: CPU 2-5%, メモリ 50MB
+- RTMP Server: CPU 2-5%, メモリ 50MB
 
-### Quick Development Start (Recommended)
+## 🔒 セキュリティ
 
-The easiest way to start developing is using the included development environment with hot-reloading:
+### 本番環境での注意点
+1. RTMPストリームキーを適切に管理
+2. Web UIにアクセス制限を設定
+3. ファイアウォール設定を確認
+4. ログローテーションを設定
 
+## 📚 API リファレンス
+
+### REST API
+- `GET /api/status` - システム状況取得
+- `GET /api/videos` - 動画一覧取得
+- `POST /api/switch` - 動画切り替え
+- `POST /api/stop` - 配信停止
+- `GET /api/health` - ヘルスチェック
+- `GET /api/logs` - ログ取得
+
+### 使用例
 ```bash
-# Start development environment with hot-reloading
-make dev
+# 動画切り替え
+curl -X POST http://localhost:8080/api/switch \
+     -H "Content-Type: application/json" \
+     -d '{"video": "test-video.mp4"}'
 
-# Or manually:
-docker-compose -f docker-compose.dev.yml up -d
+# ステータス確認
+curl http://localhost:8080/api/status
 ```
 
-This will start:
+## 📄 ライセンス
 
-- Frontend with hot-reloading: http://localhost:8080
-- Backend API: http://localhost:3001
-- RTMP Server: rtmp://localhost:1935/live
-
-### Available Make Commands
-
-```bash
-make dev          # Start development environment
-make dev-build    # Build development containers
-make prod         # Start production environment
-make down         # Stop all containers
-make logs         # View all container logs
-make restart      # Restart all containers
-```
-
-### Manual Development Setup
-
-For local development without Docker:
-
-1. Install dependencies:
-
-```bash
-# Backend
-cd backend && npm install
-
-# Frontend
-cd frontend && npm install
-```
-
-2. Start development servers:
-
-```bash
-# Backend (from backend directory)
-npm run dev
-
-# Frontend (from frontend directory)
-npm start
-```
-
-## Configuration
-
-### Environment Variables
-
-Environment variables are automatically configured for development and production:
-
-**Development** (`frontend/.env.development`):
-
-```env
-REACT_APP_API_URL=http://localhost:3001
-GENERATE_SOURCEMAP=true
-CHOKIDAR_USEPOLLING=true
-```
-
-**Production** (`frontend/.env.production`):
-
-```env
-REACT_APP_API_URL=/api
-GENERATE_SOURCEMAP=false
-```
-
-**Backend** (create `.env` in backend directory):
-
-```env
-NODE_ENV=development
-PORT=3000
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-```
-
-### Stream Settings
-
-Default stream settings can be configured in the web interface:
-
-- Video Codec: libx264, libx265, copy
-- Audio Codec: aac, mp3, copy
-- Video Bitrate: 1000k - 8000k
-- Audio Bitrate: 128k - 320k
-- Resolution: Original, 1920x1080, 1280x720, 854x480
-
-## API Documentation
-
-### Endpoints
-
-#### Files
-
-- `GET /api/files` - List uploaded files
-- `POST /api/files/upload` - Upload a new file
-- `DELETE /api/files/:id` - Delete a file
-
-#### Google Drive
-
-- `POST /api/google-drive/list` - List files from a shared folder
-- `POST /api/google-drive/download` - Download a file from Google Drive
-
-#### Streams
-
-- `GET /api/streams` - List active streams
-- `POST /api/streams/start` - Start a new stream
-- `POST /api/streams/stop/:id` - Stop a stream
-- `GET /api/streams/status/:id` - Get stream status
-
-## Project Structure
-
-```
-/
-├── backend/                    # Express.js API server
-│   ├── src/
-│   │   ├── routes/            # API endpoints
-│   │   ├── services/          # Business logic
-│   │   └── utils/             # Utility functions
-│   └── Dockerfile
-│
-├── frontend/                  # React application
-│   ├── src/
-│   │   ├── pages/            # Page components
-│   │   ├── services/         # API client services
-│   │   ├── components/       # UI components
-│   │   └── App.js
-│   ├── Dockerfile            # Production build
-│   ├── Dockerfile.dev        # Development with hot-reload
-│   ├── .env.development      # Development environment
-│   └── .env.production       # Production environment
-│
-├── rtmp-server/              # Nginx RTMP server
-│   ├── config/
-│   └── Dockerfile
-│
-├── docs/                     # Documentation
-│   ├── development-setup.md  # Development guide
-│   └── planning/             # Design documents
-│
-├── scripts/                  # Utility scripts
-├── Makefile                  # Development commands
-├── docker-compose.yml        # Production configuration
-└── docker-compose.dev.yml    # Development configuration
-```
-
-## Testing
-
-### Running Tests
-
-```bash
-# Run all tests (backend + frontend)
-make test
-
-# Backend tests only
-cd backend && npm test
-
-# Frontend tests only
-cd frontend && npm test
-
-# With coverage
-npm run test:coverage
-```
-
-### Linting and Formatting
-
-```bash
-# Run linter
-make lint
-
-# Fix linting issues
-make lint-fix
-
-# Format code
-make format
-```
-
-## CI/CD
-
-This project uses GitHub Actions for continuous integration and deployment:
-
-- **Test Pipeline**: Runs on every push and pull request
-- **Build Pipeline**: Builds Docker images on main branch
-- **Deploy Pipeline**: Deploys to production on release tags
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Style
-
-- Follow ESLint configuration
-- Use Prettier for code formatting
-- Write meaningful commit messages
-- Add tests for new features
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Port already in use**
-
-   ```bash
-   # Stop containers and restart
-   make down
-   make dev  # or make prod
-   ```
-
-2. **Hot reloading not working in development**
-
-   ```bash
-   # Restart development environment
-   make restart-frontend
-   # or rebuild completely
-   make dev-build && make dev
-   ```
-
-3. **White screen in browser**
-
-   ```bash
-   # Check container logs
-   make logs-frontend
-   # Restart frontend container
-   docker-compose -f docker-compose.dev.yml restart streamcaster-frontend-dev
-   ```
-
-4. **API calls failing**
-
-   - Check that backend is running on correct port (3001)
-   - Verify environment variables are loaded correctly
-   - Check container logs: `make logs-backend`
-
-5. **Google Drive authentication fails**
-   - Ensure correct OAuth credentials in `.env`
-   - Check if the shared folder URL is valid
-
-### Logs
-
-View container logs:
-
-```bash
-# All containers
-make logs
-
-# Specific container
-make logs-frontend  # or logs-backend, logs-rtmp
-docker logs streamcaster-frontend-dev -f  # Development
-docker logs streamcaster-backend -f       # Backend
-```
-
-### Development vs Production
-
-| Feature            | Development             | Production   |
-| ------------------ | ----------------------- | ------------ |
-| Frontend Server    | React Dev Server (8080) | Nginx (8080) |
-| Hot Reloading      | ✅ Enabled              | ❌ Disabled  |
-| Source Maps        | ✅ Enabled              | ❌ Disabled  |
-| Build Optimization | ❌ Disabled             | ✅ Enabled   |
-| Debug Info         | ✅ Visible              | ❌ Hidden    |
-| File Watching      | ✅ Polling              | N/A          |
-
-## Security Considerations
-
-- No authentication is required by design
-- Ensure proper network isolation in production
-- Validate all input data
-- Use environment variables for sensitive configuration
-- Regular security updates for dependencies
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [FFmpeg](https://ffmpeg.org/) for media processing
-- [nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module) for RTMP server
-- [React](https://reactjs.org/) and [Express.js](https://expressjs.com/) for web framework
+本プロジェクトは実証目的で作成されており、本番環境での使用には追加の考慮が必要です。
