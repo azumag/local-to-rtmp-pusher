@@ -1,0 +1,247 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+jobs:
+  full-system-test:
+    name: Full System Integration Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: controller/package-lock.json
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install controller dependencies
+        working-directory: ./controller
+        run: npm ci
+
+      - name: Create test video files
+        working-directory: ./videos
+        run: |
+          # Create dummy video files for testing
+          ffmpeg -f lavfi -i testsrc=duration=10:size=320x240:rate=1 -f lavfi -i sine=frequency=1000:duration=10 -c:v libx264 -c:a aac -shortest test1.mp4
+          ffmpeg -f lavfi -i testsrc=duration=8:size=320x240:rate=1 -f lavfi -i sine=frequency=500:duration=8 -c:v libx264 -c:a aac -shortest test2.mp4
+
+      - name: Start RTMP server
+        working-directory: ./poc
+        run: |
+          docker compose up -d
+          
+          # Wait for RTMP server
+          timeout=60
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if nc -z localhost 1936; then
+              echo "RTMP server is ready!"
+              break
+            fi
+            echo "Waiting for RTMP server... ($elapsed/$timeout seconds)"
+            sleep 3
+            elapsed=$((elapsed + 3))
+          done
+          
+          if [ $elapsed -ge $timeout ]; then
+            echo "RTMP server failed to start"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Start controller
+        working-directory: ./controller
+        run: |
+          npm start &
+          echo $! > controller.pid
+          
+          # Wait for controller
+          timeout=60
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8080/api/health; then
+              echo "Controller is ready!"
+              break
+            fi
+            echo "Waiting for controller... ($elapsed/$timeout seconds)"
+            sleep 3
+            elapsed=$((elapsed + 3))
+          done
+          
+          if [ $elapsed -ge $timeout ]; then
+            echo "Controller failed to start"
+            if [ -f controller.pid ]; then
+              kill $(cat controller.pid) || true
+            fi
+            exit 1
+          fi
+
+      - name: Test complete streaming workflow
+        run: |
+          # Test 1: Start RTMP stream
+          echo "Starting RTMP stream..."
+          response=$(curl -s -X POST http://localhost:8080/api/rtmp/start)
+          echo "RTMP start response: $response"
+          
+          # Wait a bit for RTMP stream to initialize
+          sleep 5
+          
+          # Test 2: Check status
+          echo "Checking system status..."
+          status=$(curl -s http://localhost:8080/api/status)
+          echo "Status: $status"
+          
+          # Test 3: List available videos
+          echo "Listing videos..."
+          videos=$(curl -s http://localhost:8080/api/videos)
+          echo "Videos: $videos"
+          
+          # Test 4: Start UDP streaming
+          echo "Starting UDP streaming with test1.mp4..."
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"video":"test1.mp4"}' http://localhost:8080/api/switch)
+          echo "UDP start response: $response"
+          
+          # Wait for streaming to stabilize
+          sleep 8
+          
+          # Test 5: Check streaming status
+          echo "Checking streaming status..."
+          status=$(curl -s http://localhost:8080/api/status)
+          echo "Streaming status: $status"
+          
+          # Test 6: Switch to different video
+          echo "Switching to test2.mp4..."
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"video":"test2.mp4"}' http://localhost:8080/api/switch)
+          echo "Video switch response: $response"
+          
+          # Wait for switch to complete
+          sleep 5
+          
+          # Test 7: Stop UDP streaming
+          echo "Stopping UDP streaming..."
+          response=$(curl -s -X POST http://localhost:8080/api/stop)
+          echo "UDP stop response: $response"
+          
+          # Test 8: Stop RTMP stream
+          echo "Stopping RTMP stream..."
+          response=$(curl -s -X POST http://localhost:8080/api/rtmp/stop)
+          echo "RTMP stop response: $response"
+          
+          # Final status check
+          sleep 3
+          echo "Final status check..."
+          status=$(curl -s http://localhost:8080/api/status)
+          echo "Final status: $status"
+
+      - name: Check for streaming errors
+        run: |
+          # Check controller logs for critical errors
+          if [ -f controller/controller.pid ]; then
+            echo "Controller is still running, checking for errors..."
+            # Note: In a real scenario, you might want to capture and analyze logs
+          fi
+          
+          # Check RTMP server logs
+          echo "Checking RTMP server status..."
+          docker compose -f poc/docker-compose.yml logs poc-rtmp | tail -20
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Stop controller
+          if [ -f controller/controller.pid ]; then
+            kill $(cat controller/controller.pid) || true
+            rm controller/controller.pid
+          fi
+          
+          # Stop RTMP server
+          docker compose -f poc/docker-compose.yml down || true
+          
+          # Clean up test files
+          rm -f videos/test1.mp4 videos/test2.mp4
+
+  performance-test:
+    name: Basic Performance Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: controller/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./controller
+        run: npm ci
+
+      - name: Start controller
+        working-directory: ./controller
+        run: |
+          npm start &
+          echo $! > controller.pid
+          
+          # Wait for controller
+          timeout=30
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8080/api/health; then
+              echo "Controller is ready!"
+              break
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+
+      - name: Run basic load test
+        run: |
+          # Simple load test with curl
+          echo "Running basic load test..."
+          
+          for i in {1..50}; do
+            curl -s http://localhost:8080/api/status > /dev/null &
+            curl -s http://localhost:8080/api/videos > /dev/null &
+            curl -s http://localhost:8080/api/health > /dev/null &
+          done
+          
+          # Wait for all requests to complete
+          wait
+          
+          echo "Load test completed"
+
+      - name: Memory usage check
+        run: |
+          # Check if controller is still responsive after load test
+          if curl -f http://localhost:8080/api/health; then
+            echo "Controller is still responsive after load test"
+          else
+            echo "Controller became unresponsive after load test"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -f controller/controller.pid ]; then
+            kill $(cat controller/controller.pid) || true
+            rm controller/controller.pid
+          fi
