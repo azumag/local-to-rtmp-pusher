@@ -1,0 +1,30 @@
+FROM alpine:latest
+
+# 必要パッケージのインストール
+RUN apk add --no-cache \
+    bash \
+    curl \
+    docker-cli \
+    ffmpeg \
+    nodejs \
+    npm
+
+# 作業ディレクトリ設定
+WORKDIR /app
+
+# package.jsonをコピーして依存関係をインストール
+COPY controller/package.json ./
+RUN npm install --production
+
+# アプリケーションファイルをコピー
+COPY controller/ ./
+COPY scripts/ ./scripts/
+
+# 実行権限付与
+RUN chmod +x scripts/*.sh
+
+# ポート公開
+EXPOSE 8080
+
+# 起動コマンド
+CMD ["node", "controller.js"]
