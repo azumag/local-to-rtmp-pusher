@@ -5,6 +5,7 @@ class ProcessManager {
     constructor() {
         this.rtmpProcess = null;  // UDP受信→RTMP配信プロセス
         this.udpSenderProcess = null;  // 動画→UDP送信プロセス
+        this.relayProcess = null;  // RTMPリレープロセス
         this.log = {
             info: (msg) => console.log(`[${new Date().toISOString()}] [ProcessManager] [INFO] ${msg}`),
             error: (msg) => console.error(`[${new Date().toISOString()}] [ProcessManager] [ERROR] ${msg}`),
@@ -188,13 +189,130 @@ class ProcessManager {
         }
     }
 
+    // RTMPリレー開始
+    async startRelay(relayUrl, encodingSettings = {}) {
+        try {
+            if (this.relayProcess) {
+                this.log.warning('RTMPリレーは既に開始されています');
+                return { success: false, error: 'RTMP relay already running' };
+            }
+
+            if (!this.rtmpProcess) {
+                this.log.warning('RTMPストリームが開始されていません');
+                return { success: false, error: 'RTMP stream not running' };
+            }
+
+            this.log.info(`RTMPリレー開始: ${relayUrl}`);
+
+            // デフォルトエンコーディング設定
+            const defaultSettings = {
+                videoCodec: 'libx264',
+                preset: 'veryfast',
+                videoBitrate: '2500k',
+                maxrate: '2500k',
+                bufsize: '5000k',
+                audioCodec: 'aac',
+                audioBitrate: '128k'
+            };
+
+            // 設定をマージ
+            const settings = { ...defaultSettings, ...encodingSettings };
+
+            // ffmpegコマンドを構築
+            const args = [
+                '-i', 'rtmp://localhost:1936/live/stream',
+                '-c:v', settings.videoCodec,
+                '-preset', settings.preset,
+                '-b:v', settings.videoBitrate,
+                '-maxrate', settings.maxrate,
+                '-bufsize', settings.bufsize,
+                '-c:a', settings.audioCodec,
+                '-b:a', settings.audioBitrate,
+                '-f', 'flv',
+                relayUrl
+            ];
+
+            this.relayProcess = spawn('ffmpeg', args);
+
+            this.relayProcess.stdout.on('data', (data) => {
+                this.log.info(`Relay stdout: ${data}`);
+            });
+
+            this.relayProcess.stderr.on('data', (data) => {
+                this.log.info(`Relay stderr: ${data}`);
+            });
+
+            this.relayProcess.on('close', (code) => {
+                this.log.info(`Relayプロセス終了: code ${code}`);
+                this.relayProcess = null;
+            });
+
+            this.relayProcess.on('error', (error) => {
+                this.log.error(`Relayプロセスエラー: ${error.message}`);
+                this.relayProcess = null;
+            });
+
+            return { 
+                success: true, 
+                message: 'RTMP relay started',
+                settings: settings
+            };
+
+        } catch (error) {
+            this.log.error(`RTMPリレー開始エラー: ${error.message}`);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // RTMPリレー停止
+    async stopRelay() {
+        try {
+            if (!this.relayProcess) {
+                return { success: true, message: 'RTMP relay not running' };
+            }
+
+            this.log.info('RTMPリレー停止中...');
+            this.relayProcess.kill('SIGTERM');
+            
+            // プロセス終了を待つ
+            await new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    if (this.relayProcess) {
+                        this.relayProcess.kill('SIGKILL');
+                    }
+                    resolve();
+                }, 5000);
+
+                if (this.relayProcess) {
+                    this.relayProcess.on('close', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    });
+                } else {
+                    clearTimeout(timeout);
+                    resolve();
+                }
+            });
+
+            this.relayProcess = null;
+            this.log.info('RTMPリレー停止完了');
+            return { success: true, message: 'RTMP relay stopped' };
+
+        } catch (error) {
+            this.log.error(`RTMPリレー停止エラー: ${error.message}`);
+            return { success: false, error: error.message };
+        }
+    }
+
     // 状態取得
     getStatus() {
         return {
             rtmp_stream_running: !!this.rtmpProcess,
             udp_streaming_running: !!this.udpSenderProcess,
+            relay_running: !!this.relayProcess,
             rtmp_pid: this.rtmpProcess ? this.rtmpProcess.pid : null,
-            udp_sender_pid: this.udpSenderProcess ? this.udpSenderProcess.pid : null
+            udp_sender_pid: this.udpSenderProcess ? this.udpSenderProcess.pid : null,
+            relay_pid: this.relayProcess ? this.relayProcess.pid : null
         };
     }
 
@@ -202,7 +320,8 @@ class ProcessManager {
     async stopAll() {
         const results = await Promise.all([
             this.stopRtmpStream(),
-            this.stopUdpStreaming()
+            this.stopUdpStreaming(),
+            this.stopRelay()
         ]);
 
         return {

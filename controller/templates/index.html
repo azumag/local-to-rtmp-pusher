@@ -320,6 +320,69 @@
         </div>
 
         <div class="panel" style="margin-bottom: 20px;">
+            <h2>RTMPリレー制御</h2>
+            <p style="margin-bottom: 15px; color: #7f8c8d;">
+                内蔵RTMPストリームを外部サーバーにリレー配信
+            </p>
+            <div style="margin-bottom: 15px;">
+                <label for="relayUrl" style="display: block; margin-bottom: 5px; font-weight: 500;">リレー先URL:</label>
+                <input type="text" id="relayUrl" placeholder="rtmp://example.com/live/stream" 
+                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 500;">エンコーディング設定:</label>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">映像ビットレート:</label>
+                            <input type="text" id="videoBitrate" value="2500k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">音声ビットレート:</label>
+                            <input type="text" id="audioBitrate" value="128k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">最大レート:</label>
+                            <input type="text" id="maxrate" value="2500k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">バッファサイズ:</label>
+                            <input type="text" id="bufsize" value="5000k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">プリセット:</label>
+                            <select id="preset" style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                                <option value="ultrafast">ultrafast</option>
+                                <option value="superfast">superfast</option>
+                                <option value="veryfast" selected>veryfast</option>
+                                <option value="faster">faster</option>
+                                <option value="fast">fast</option>
+                                <option value="medium">medium</option>
+                                <option value="slow">slow</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-buttons">
+                <button class="btn" onclick="startRelay()" id="relayStartBtn" disabled>リレー開始</button>
+                <button class="btn danger" onclick="stopRelay()" id="relayStopBtn" disabled>リレー停止</button>
+                <button class="btn" onclick="resetEncodingSettings()">デフォルト設定に戻す</button>
+            </div>
+            
+            <div id="relayStatus" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; display: none;">
+                <strong>リレー状態:</strong> <span id="relayStatusText">--</span><br>
+                <strong>リレー先:</strong> <span id="currentRelayUrl">--</span>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 20px;">
             <h2>システム状況</h2>
             <div class="stats-grid">
                 <div class="stat-card">
@@ -337,6 +400,14 @@
                 <div class="stat-card">
                     <div class="stat-label">UDP PID</div>
                     <div class="stat-value" id="udpPid">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">リレープロセス</div>
+                    <div class="stat-value" id="relayProcessStatus">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">リレー PID</div>
+                    <div class="stat-value" id="relayPid">--</div>
                 </div>
             </div>
             <div class="control-buttons">
@@ -422,14 +493,31 @@
                 if (data.process_status) {
                     document.getElementById('rtmpProcessStatus').textContent = data.process_status.rtmp_stream_running ? 'Running' : 'Stopped';
                     document.getElementById('udpProcessStatus').textContent = data.process_status.udp_streaming_running ? 'Running' : 'Stopped';
+                    document.getElementById('relayProcessStatus').textContent = data.process_status.relay_running ? 'Running' : 'Stopped';
                     document.getElementById('rtmpPid').textContent = data.process_status.rtmp_pid || '--';
                     document.getElementById('udpPid').textContent = data.process_status.udp_sender_pid || '--';
+                    document.getElementById('relayPid').textContent = data.process_status.relay_pid || '--';
                 }
                 
                 // ボタン状態更新
                 document.getElementById('stopBtn').disabled = data.stream_status !== 'streaming';
                 document.getElementById('rtmpStartBtn').disabled = data.rtmp_stream_status === 'streaming';
                 document.getElementById('rtmpStopBtn').disabled = data.rtmp_stream_status !== 'streaming';
+                
+                // リレーボタン状態更新
+                document.getElementById('relayStartBtn').disabled = data.rtmp_stream_status !== 'streaming' || data.relay_status === 'streaming';
+                document.getElementById('relayStopBtn').disabled = data.relay_status !== 'streaming';
+                
+                // リレー状態表示更新
+                if (data.relay_status === 'streaming') {
+                    document.getElementById('relayStatus').style.display = 'block';
+                    document.getElementById('relayStatusText').textContent = '配信中';
+                    document.getElementById('currentRelayUrl').textContent = data.current_relay_url || '--';
+                } else {
+                    document.getElementById('relayStatus').style.display = 'none';
+                    document.getElementById('relayStatusText').textContent = '停止中';
+                    document.getElementById('currentRelayUrl').textContent = '--';
+                }
                 
                 // 最終更新時刻
                 document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString();
@@ -660,6 +748,90 @@
         function formatDate(dateString) {
             const date = new Date(dateString);
             return date.toLocaleDateString('ja-JP') + ' ' + date.toLocaleTimeString('ja-JP');
+        }
+
+        // RTMPリレー開始
+        async function startRelay() {
+            try {
+                const relayUrl = document.getElementById('relayUrl').value.trim();
+                if (!relayUrl) {
+                    showAlert('リレー先URLを入力してください', 'error');
+                    return;
+                }
+
+                // エンコーディング設定を収集
+                const encodingSettings = {
+                    videoBitrate: document.getElementById('videoBitrate').value,
+                    audioBitrate: document.getElementById('audioBitrate').value,
+                    maxrate: document.getElementById('maxrate').value,
+                    bufsize: document.getElementById('bufsize').value,
+                    preset: document.getElementById('preset').value
+                };
+
+                showAlert('RTMPリレーを開始中...', 'warning');
+                
+                const response = await fetch('/api/relay/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        relayUrl: relayUrl,
+                        encodingSettings: encodingSettings
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('RTMPリレーを開始しました', 'success');
+                    document.getElementById('relayStatus').style.display = 'block';
+                    refreshAll();
+                } else {
+                    showAlert('RTMPリレー開始エラー: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Relay start error:', error);
+                showAlert('RTMPリレー開始エラー: ' + error.message, 'error');
+            }
+        }
+
+        // RTMPリレー停止
+        async function stopRelay() {
+            if (!confirm('RTMPリレーを停止しますか？')) return;
+            
+            try {
+                showAlert('RTMPリレーを停止中...', 'warning');
+                
+                const response = await fetch('/api/relay/stop', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('RTMPリレーを停止しました', 'success');
+                    document.getElementById('relayStatus').style.display = 'none';
+                    refreshAll();
+                } else {
+                    showAlert('RTMPリレー停止エラー: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Relay stop error:', error);
+                showAlert('RTMPリレー停止エラー: ' + error.message, 'error');
+            }
+        }
+
+        // エンコーディング設定をデフォルトに戻す
+        function resetEncodingSettings() {
+            document.getElementById('videoBitrate').value = '2500k';
+            document.getElementById('audioBitrate').value = '128k';
+            document.getElementById('maxrate').value = '2500k';
+            document.getElementById('bufsize').value = '5000k';
+            document.getElementById('preset').value = 'veryfast';
+            showAlert('エンコーディング設定をデフォルトに戻しました', 'success');
         }
 
         // ページ離脱時に自動更新停止
