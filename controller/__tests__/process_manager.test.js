@@ -189,7 +189,7 @@ describe('ProcessManager', () => {
             const result = await stopPromise;
 
             expect(result.success).toBe(true);
-            expect(result.results).toHaveLength(2);
+            expect(result.results).toHaveLength(3); // Now includes relay stop
         });
     });
 
