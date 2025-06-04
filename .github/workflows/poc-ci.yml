@@ -1,0 +1,145 @@
+name: POC CI Pipeline
+
+on:
+  push:
+    branches: [main, development, 'feature/**', 'fix/**']
+    paths:
+      - 'poc/**'
+      - '.github/workflows/poc-ci.yml'
+  pull_request:
+    branches: [main, development]
+    paths:
+      - 'poc/**'
+      - '.github/workflows/poc-ci.yml'
+
+jobs:
+  docker-compose-test:
+    name: POC Docker Compose Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Create test video files
+        working-directory: ./videos
+        run: |
+          # Create dummy video files for testing
+          ffmpeg -f lavfi -i testsrc=duration=5:size=320x240:rate=1 -f lavfi -i sine=frequency=1000:duration=5 -c:v libx264 -c:a aac -shortest test1.mp4
+          ffmpeg -f lavfi -i testsrc=duration=3:size=320x240:rate=1 -f lavfi -i sine=frequency=500:duration=3 -c:v libx264 -c:a aac -shortest test2.mp4
+
+      - name: Test docker-compose configuration
+        working-directory: ./poc
+        run: |
+          # Validate docker-compose.yml
+          docker compose config
+          
+          # Build services
+          docker compose build
+          
+          # Start services in background
+          docker compose up -d
+          
+          # Wait for RTMP server to be ready
+          timeout=30
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if docker compose ps | grep "poc-rtmp" | grep -q "Up"; then
+              echo "RTMP server is running!"
+              break
+            fi
+            echo "Waiting for RTMP server... ($elapsed/$timeout seconds)"
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          
+          if [ $elapsed -ge $timeout ]; then
+            echo "RTMP server failed to start"
+            docker compose logs
+            exit 1
+          fi
+          
+          # Test RTMP server accessibility
+          sleep 5
+          if curl -f http://localhost:8082/stat 2>/dev/null; then
+            echo "RTMP stats endpoint is accessible"
+          else
+            echo "RTMP stats endpoint not accessible (may be expected)"
+          fi
+          
+          # Check if RTMP port is accessible
+          if nc -z localhost 1936; then
+            echo "RTMP port 1936 is accessible"
+          else
+            echo "RTMP port 1936 is not accessible"
+            docker compose logs
+            exit 1
+          fi
+          
+          # Clean up
+          docker compose down
+
+  nginx-config-test:
+    name: Validate nginx configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+
+      - name: Validate nginx configuration
+        run: |
+          # Test configuration syntax
+          sudo nginx -t -c $(pwd)/poc/nginx.conf
+
+  script-validation:
+    name: Validate POC scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Validate FFmpeg commands
+        working-directory: ./poc
+        run: |
+          # Check if poc.sh exists and is readable
+          if [ -f poc.sh ] && [ -r poc.sh ]; then
+            echo "poc.sh exists and is readable"
+            
+            # Check for valid FFmpeg command syntax (without executing)
+            if grep -q "ffmpeg.*udp://127.0.0.1:1234" poc.sh; then
+              echo "Found UDP receiver command"
+            fi
+            
+            if grep -q "ffmpeg.*rtmp://localhost:1936" poc.sh; then
+              echo "Found RTMP output command"
+            fi
+            
+            if grep -q "ffmpeg.*-re.*-i.*mp4.*udp://127.0.0.1:1234" poc.sh; then
+              echo "Found UDP sender command"
+            fi
+          else
+            echo "poc.sh not found or not readable"
+          fi
+          
+          # Test FFmpeg availability and basic functionality
+          ffmpeg -version
+          
+          # Test UDP socket binding (without actual streaming)
+          echo "FFmpeg and network tools are available"

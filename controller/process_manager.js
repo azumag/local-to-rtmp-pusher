@@ -16,11 +16,11 @@ class ProcessManager {
     async startRtmpStream() {
         try {
             if (this.rtmpProcess) {
-                this.log.warning("RTMPストリームは既に開始されています");
-                return { success: false, error: "RTMP stream already running" };
+                this.log.warning('RTMPストリームは既に開始されています');
+                return { success: false, error: 'RTMP stream already running' };
             }
 
-            this.log.info("RTMPストリーム開始: UDP受信→RTMP配信");
+            this.log.info('RTMPストリーム開始: UDP受信→RTMP配信');
             
             // ffmpeg -i "udp://127.0.0.1:1234?timeout=0" -c copy -f flv rtmp://localhost:1936/live/stream
             const args = [
@@ -50,7 +50,7 @@ class ProcessManager {
                 this.rtmpProcess = null;
             });
 
-            return { success: true, message: "RTMP stream started" };
+            return { success: true, message: 'RTMP stream started' };
 
         } catch (error) {
             this.log.error(`RTMPストリーム開始エラー: ${error.message}`);
@@ -62,10 +62,10 @@ class ProcessManager {
     async stopRtmpStream() {
         try {
             if (!this.rtmpProcess) {
-                return { success: true, message: "RTMP stream not running" };
+                return { success: true, message: 'RTMP stream not running' };
             }
 
-            this.log.info("RTMPストリーム停止中...");
+            this.log.info('RTMPストリーム停止中...');
             this.rtmpProcess.kill('SIGTERM');
             
             // プロセス終了を待つ
@@ -89,8 +89,8 @@ class ProcessManager {
             });
 
             this.rtmpProcess = null;
-            this.log.info("RTMPストリーム停止完了");
-            return { success: true, message: "RTMP stream stopped" };
+            this.log.info('RTMPストリーム停止完了');
+            return { success: true, message: 'RTMP stream stopped' };
 
         } catch (error) {
             this.log.error(`RTMPストリーム停止エラー: ${error.message}`);
@@ -152,10 +152,10 @@ class ProcessManager {
     async stopUdpStreaming() {
         try {
             if (!this.udpSenderProcess) {
-                return { success: true, message: "UDP streaming not running" };
+                return { success: true, message: 'UDP streaming not running' };
             }
 
-            this.log.info("UDPストリーミング停止中...");
+            this.log.info('UDPストリーミング停止中...');
             this.udpSenderProcess.kill('SIGTERM');
             
             // プロセス終了を待つ
@@ -179,8 +179,8 @@ class ProcessManager {
             });
 
             this.udpSenderProcess = null;
-            this.log.info("UDPストリーミング停止完了");
-            return { success: true, message: "UDP streaming stopped" };
+            this.log.info('UDPストリーミング停止完了');
+            return { success: true, message: 'UDP streaming stopped' };
 
         } catch (error) {
             this.log.error(`UDPストリーミング停止エラー: ${error.message}`);
