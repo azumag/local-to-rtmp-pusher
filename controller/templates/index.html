@@ -274,8 +274,12 @@
             <h1>UDP配信システム制御画面</h1>
             <div class="status-bar">
                 <div class="status-item">
+                    <div class="status-indicator" id="rtmpStatus"></div>
+                    <span>RTMPストリーム: <strong id="rtmpStatusText">読み込み中...</strong></span>
+                </div>
+                <div class="status-item">
                     <div class="status-indicator" id="streamStatus"></div>
-                    <span>配信状況: <strong id="streamStatusText">読み込み中...</strong></span>
+                    <span>UDP配信: <strong id="streamStatusText">読み込み中...</strong></span>
                 </div>
                 <div class="status-item">
                     <span>現在の動画: <strong id="currentVideo">なし</strong></span>
@@ -288,42 +292,56 @@
 
         <div class="main-content">
             <div class="panel">
-                <h2>動画選択</h2>
+                <h2>RTMPストリーム制御</h2>
+                <p style="margin-bottom: 15px; color: #7f8c8d;">
+                    まずRTMPストリームを開始してください (UDP受信→RTMP配信)
+                </p>
+                <div class="control-buttons">
+                    <button class="btn" onclick="startRtmpStream()" id="rtmpStartBtn">RTMPストリーム開始</button>
+                    <button class="btn danger" onclick="stopRtmpStream()" id="rtmpStopBtn" disabled>RTMPストリーム停止</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>動画選択・UDP配信</h2>
+                <p style="margin-bottom: 15px; color: #7f8c8d;">
+                    動画ファイルを選択してUDP送信を開始
+                </p>
                 <div id="videoList" class="video-list">
                     <div style="padding: 20px; text-align: center; color: #7f8c8d;">
                         動画を読み込み中...
                     </div>
                 </div>
                 <div class="control-buttons">
-                    <button class="btn" onclick="refreshVideos()">更新</button>
-                    <button class="btn danger" onclick="stopStream()" id="stopBtn" disabled>配信停止</button>
+                    <button class="btn" onclick="refreshVideos()">動画リスト更新</button>
+                    <button class="btn danger" onclick="stopStream()" id="stopBtn" disabled>UDP配信停止</button>
                 </div>
             </div>
+        </div>
 
-            <div class="panel">
-                <h2>システム状況</h2>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Receiver状態</div>
-                        <div class="stat-value" id="receiverStatus">--</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">CPU使用率</div>
-                        <div class="stat-value" id="cpuUsage">--</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">メモリ使用率</div>
-                        <div class="stat-value" id="memoryUsage">--</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Sender数</div>
-                        <div class="stat-value" id="senderCount">--</div>
-                    </div>
+        <div class="panel" style="margin-bottom: 20px;">
+            <h2>システム状況</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">RTMPプロセス</div>
+                    <div class="stat-value" id="rtmpProcessStatus">--</div>
                 </div>
-                <div class="control-buttons">
-                    <button class="btn" onclick="refreshStatus()">ステータス更新</button>
-                    <button class="btn" onclick="showHealth()">ヘルスチェック</button>
+                <div class="stat-card">
+                    <div class="stat-label">UDPプロセス</div>
+                    <div class="stat-value" id="udpProcessStatus">--</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-label">RTMP PID</div>
+                    <div class="stat-value" id="rtmpPid">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">UDP PID</div>
+                    <div class="stat-value" id="udpPid">--</div>
+                </div>
+            </div>
+            <div class="control-buttons">
+                <button class="btn" onclick="refreshStatus()">ステータス更新</button>
+                <button class="btn" onclick="showHealth()">ヘルスチェック</button>
             </div>
         </div>
 
@@ -372,35 +390,46 @@
                 const response = await fetch('/api/status');
                 const data = await response.json();
                 
-                // 配信状況更新
-                const statusIndicator = document.getElementById('streamStatus');
-                const statusText = document.getElementById('streamStatusText');
+                // RTMPストリーム状況更新
+                const rtmpStatusIndicator = document.getElementById('rtmpStatus');
+                const rtmpStatusText = document.getElementById('rtmpStatusText');
+                
+                if (data.rtmp_stream_status === 'streaming') {
+                    rtmpStatusIndicator.className = 'status-indicator streaming';
+                    rtmpStatusText.textContent = '配信中';
+                } else {
+                    rtmpStatusIndicator.className = 'status-indicator stopped';
+                    rtmpStatusText.textContent = '停止中';
+                }
+                
+                // UDPストリーム状況更新
+                const udpStatusIndicator = document.getElementById('streamStatus');
+                const udpStatusText = document.getElementById('streamStatusText');
                 
                 if (data.stream_status === 'streaming') {
-                    statusIndicator.className = 'status-indicator streaming';
-                    statusText.textContent = '配信中';
+                    udpStatusIndicator.className = 'status-indicator streaming';
+                    udpStatusText.textContent = '配信中';
                 } else {
-                    statusIndicator.className = 'status-indicator stopped';
-                    statusText.textContent = '停止中';
+                    udpStatusIndicator.className = 'status-indicator stopped';
+                    udpStatusText.textContent = '停止中';
                 }
                 
                 // 現在の動画更新
                 document.getElementById('currentVideo').textContent = data.current_video || 'なし';
                 currentVideoFile = data.current_video;
                 
-                // システム統計更新
-                if (data.receiver_stats) {
-                    document.getElementById('receiverStatus').textContent = data.receiver_stats.status || '--';
-                    document.getElementById('cpuUsage').textContent = data.receiver_stats.cpu_percent ? data.receiver_stats.cpu_percent + '%' : '--';
-                    document.getElementById('memoryUsage').textContent = data.receiver_stats.memory_percent ? data.receiver_stats.memory_percent.toFixed(1) + '%' : '--';
+                // プロセス状況更新
+                if (data.process_status) {
+                    document.getElementById('rtmpProcessStatus').textContent = data.process_status.rtmp_stream_running ? 'Running' : 'Stopped';
+                    document.getElementById('udpProcessStatus').textContent = data.process_status.udp_streaming_running ? 'Running' : 'Stopped';
+                    document.getElementById('rtmpPid').textContent = data.process_status.rtmp_pid || '--';
+                    document.getElementById('udpPid').textContent = data.process_status.udp_sender_pid || '--';
                 }
                 
-                if (data.sender_stats) {
-                    document.getElementById('senderCount').textContent = data.sender_stats.count || '0';
-                }
-                
-                // 停止ボタン状態更新
+                // ボタン状態更新
                 document.getElementById('stopBtn').disabled = data.stream_status !== 'streaming';
+                document.getElementById('rtmpStartBtn').disabled = data.rtmp_stream_status === 'streaming';
+                document.getElementById('rtmpStopBtn').disabled = data.rtmp_stream_status !== 'streaming';
                 
                 // 最終更新時刻
                 document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString();
@@ -454,10 +483,10 @@
             }
         }
 
-        // 動画切り替え
+        // 動画切り替え（UDP配信開始）
         async function switchVideo(videoFile) {
             try {
-                showAlert('動画を切り替え中...', 'warning');
+                showAlert(`UDP配信開始中: ${videoFile}`, 'warning');
                 
                 const response = await fetch('/api/switch', {
                     method: 'POST',
@@ -470,24 +499,24 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert(`動画を ${videoFile} に切り替えました`, 'success');
+                    showAlert(`UDP配信開始: ${videoFile}`, 'success');
                     refreshAll();
                 } else {
-                    showAlert('動画切り替えエラー: ' + data.error, 'error');
+                    showAlert('UDP配信開始エラー: ' + data.error, 'error');
                 }
                 
             } catch (error) {
                 console.error('Switch video error:', error);
-                showAlert('動画切り替えエラー: ' + error.message, 'error');
+                showAlert('UDP配信開始エラー: ' + error.message, 'error');
             }
         }
 
-        // 配信停止
+        // UDP配信停止
         async function stopStream() {
-            if (!confirm('配信を停止しますか？')) return;
+            if (!confirm('UDP配信を停止しますか？')) return;
             
             try {
-                showAlert('配信を停止中...', 'warning');
+                showAlert('UDP配信を停止中...', 'warning');
                 
                 const response = await fetch('/api/stop', {
                     method: 'POST'
@@ -496,15 +525,15 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert('配信を停止しました', 'success');
+                    showAlert('UDP配信を停止しました', 'success');
                     refreshAll();
                 } else {
-                    showAlert('配信停止エラー: ' + data.error, 'error');
+                    showAlert('UDP配信停止エラー: ' + data.error, 'error');
                 }
                 
             } catch (error) {
                 console.error('Stop stream error:', error);
-                showAlert('配信停止エラー: ' + error.message, 'error');
+                showAlert('UDP配信停止エラー: ' + error.message, 'error');
             }
         }
 
@@ -532,6 +561,56 @@
         // ログクリア
         function clearLogs() {
             document.getElementById('logOutput').textContent = '';
+        }
+
+        // RTMPストリーム開始
+        async function startRtmpStream() {
+            try {
+                showAlert('RTMPストリームを開始中...', 'warning');
+                
+                const response = await fetch('/api/rtmp/start', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('RTMPストリームを開始しました', 'success');
+                    refreshAll();
+                } else {
+                    showAlert('RTMPストリーム開始エラー: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('RTMP start error:', error);
+                showAlert('RTMPストリーム開始エラー: ' + error.message, 'error');
+            }
+        }
+
+        // RTMPストリーム停止
+        async function stopRtmpStream() {
+            if (!confirm('RTMPストリームを停止しますか？')) return;
+            
+            try {
+                showAlert('RTMPストリームを停止中...', 'warning');
+                
+                const response = await fetch('/api/rtmp/stop', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('RTMPストリームを停止しました', 'success');
+                    refreshAll();
+                } else {
+                    showAlert('RTMPストリーム停止エラー: ' + data.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('RTMP stop error:', error);
+                showAlert('RTMPストリーム停止エラー: ' + error.message, 'error');
+            }
         }
 
         // ヘルスチェック

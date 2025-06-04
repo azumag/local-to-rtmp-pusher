@@ -3,7 +3,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
-const DockerManager = require('./docker_manager');
+const ProcessManager = require('./process_manager');
 
 // ロガー設定
 const log = {
@@ -19,18 +19,18 @@ app.use(express.static(path.join(__dirname, 'templates')));
 // グローバル状態
 let currentVideo = null;
 let streamStatus = "stopped";
-let dockerManager = null;
+let rtmpStreamStatus = "stopped";
+let processManager = null;
 
-// DockerManager初期化
-async function initializeDockerManager() {
+// ProcessManager初期化
+async function initializeProcessManager() {
     try {
-        log.info("DockerManager初期化開始...");
-        dockerManager = new DockerManager();
-        await dockerManager.initialize();
-        log.info("DockerManager初期化成功");
+        log.info("ProcessManager初期化開始...");
+        processManager = new ProcessManager();
+        log.info("ProcessManager初期化成功");
         return true;
     } catch (error) {
-        log.error(`DockerManager初期化失敗: ${error.message}`);
+        log.error(`ProcessManager初期化失敗: ${error.message}`);
         return false;
     }
 }
@@ -43,22 +43,22 @@ app.get('/', (req, res) => {
 // 配信状況取得
 app.get('/api/status', async (req, res) => {
     try {
-        if (!dockerManager) {
+        if (!processManager) {
             return res.json({
                 stream_status: "error",
+                rtmp_stream_status: "error",
                 current_video: null,
-                error: "DockerManager not initialized"
+                error: "ProcessManager not initialized"
             });
         }
 
-        const receiverStats = await dockerManager.getContainerStats("streaming-receiver");
-        const senderStats = await dockerManager.getSenderStatus();
+        const processStatus = processManager.getStatus();
         
         res.json({
             stream_status: streamStatus,
+            rtmp_stream_status: rtmpStreamStatus,
             current_video: currentVideo,
-            receiver_stats: receiverStats,
-            sender_stats: senderStats,
+            process_status: processStatus,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -70,7 +70,7 @@ app.get('/api/status', async (req, res) => {
 // 利用可能動画一覧
 app.get('/api/videos', async (req, res) => {
     try {
-        const videosDir = "/app/videos";
+        const videosDir = path.join(__dirname, '../videos');
         const videos = [];
         
         if (await fs.pathExists(videosDir)) {
@@ -100,13 +100,13 @@ app.get('/api/videos', async (req, res) => {
     }
 });
 
-// 動画切り替え
+// 動画切り替え（UDPストリーミング開始）
 app.post('/api/switch', async (req, res) => {
     try {
-        if (!dockerManager) {
+        if (!processManager) {
             return res.status(500).json({ 
                 success: false, 
-                error: "DockerManager not initialized" 
+                error: "ProcessManager not initialized" 
             });
         }
 
@@ -119,7 +119,7 @@ app.post('/api/switch', async (req, res) => {
         }
 
         // ファイル存在確認
-        const videoPath = `/app/videos/${video}`;
+        const videoPath = path.join(__dirname, '../videos', video);
         if (!(await fs.pathExists(videoPath))) {
             return res.status(404).json({ 
                 success: false, 
@@ -137,13 +137,8 @@ app.post('/api/switch', async (req, res) => {
 
         log.info(`動画切り替え開始: ${currentVideo} → ${video}`);
 
-        // 既存のsenderコンテナを停止
-        if (currentVideo) {
-            await dockerManager.stopSender();
-        }
-
-        // 新しいsenderコンテナを起動
-        const result = await dockerManager.startSender(video);
+        // UDPストリーミング開始
+        const result = await processManager.startUdpStreaming(video);
 
         if (result.success) {
             currentVideo = video;
@@ -171,17 +166,17 @@ app.post('/api/switch', async (req, res) => {
     }
 });
 
-// 配信停止
+// 配信停止（UDPストリーミング停止）
 app.post('/api/stop', async (req, res) => {
     try {
-        if (!dockerManager) {
+        if (!processManager) {
             return res.status(500).json({ 
                 success: false, 
-                error: "DockerManager not initialized" 
+                error: "ProcessManager not initialized" 
             });
         }
 
-        const result = await dockerManager.stopSender();
+        const result = await processManager.stopUdpStreaming();
 
         if (result.success) {
             currentVideo = null;
@@ -208,23 +203,94 @@ app.post('/api/stop', async (req, res) => {
     }
 });
 
-// ヘルスチェック
-app.get('/api/health', async (req, res) => {
+// RTMPストリーム開始
+app.post('/api/rtmp/start', async (req, res) => {
     try {
-        if (!dockerManager) {
-            return res.json({
-                status: "error",
-                error: "DockerManager not initialized"
+        if (!processManager) {
+            return res.status(500).json({ 
+                success: false, 
+                error: "ProcessManager not initialized" 
             });
         }
 
-        const receiverHealth = await dockerManager.checkReceiverHealth();
-        const senderHealth = await dockerManager.checkSenderHealth();
+        const result = await processManager.startRtmpStream();
+
+        if (result.success) {
+            rtmpStreamStatus = "streaming";
+            log.info("RTMPストリーム開始完了");
+            
+            res.json({
+                success: true,
+                message: "RTMP stream started successfully"
+            });
+        } else {
+            log.error(`RTMPストリーム開始失敗: ${result.error}`);
+            res.status(500).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        log.error(`RTMP start API error: ${error.message}`);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// RTMPストリーム停止
+app.post('/api/rtmp/stop', async (req, res) => {
+    try {
+        if (!processManager) {
+            return res.status(500).json({ 
+                success: false, 
+                error: "ProcessManager not initialized" 
+            });
+        }
+
+        const result = await processManager.stopRtmpStream();
+
+        if (result.success) {
+            rtmpStreamStatus = "stopped";
+            log.info("RTMPストリーム停止完了");
+            
+            res.json({
+                success: true,
+                message: "RTMP stream stopped successfully"
+            });
+        } else {
+            log.error(`RTMPストリーム停止失敗: ${result.error}`);
+            res.status(500).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        log.error(`RTMP stop API error: ${error.message}`);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// ヘルスチェック
+app.get('/api/health', async (req, res) => {
+    try {
+        if (!processManager) {
+            return res.json({
+                status: "error",
+                error: "ProcessManager not initialized"
+            });
+        }
+
+        const processStatus = processManager.getStatus();
 
         res.json({
-            status: (receiverHealth && senderHealth) ? "healthy" : "unhealthy",
-            receiver: receiverHealth,
-            sender: senderHealth,
+            status: "healthy",
+            rtmp_process: processStatus.rtmp_stream_running,
+            udp_process: processStatus.udp_streaming_running,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -239,25 +305,11 @@ app.get('/api/health', async (req, res) => {
 // ログ取得
 app.get('/api/logs', async (req, res) => {
     try {
-        if (!dockerManager) {
-            return res.status(500).json({ error: "DockerManager not initialized" });
-        }
-
         const logType = req.query.type || 'controller';
         const lines = parseInt(req.query.lines) || 100;
 
-        let logs;
-        switch (logType) {
-            case 'receiver':
-                logs = await dockerManager.getContainerLogs("streaming-receiver", lines);
-                break;
-            case 'sender':
-                logs = await dockerManager.getSenderLogs(lines);
-                break;
-            default:
-                logs = await dockerManager.getControllerLogs(lines);
-                break;
-        }
+        // シンプルなログ実装 - 実際にはファイルから読み込むかメモリに保存
+        const logs = [`[${new Date().toISOString()}] Log type: ${logType}`, "System is running..."];
 
         res.json({
             logs: logs,
@@ -284,22 +336,10 @@ app.use((error, req, res, next) => {
 async function startServer() {
     log.info("UDP配信システム制御コントローラー起動中...");
     
-    // DockerManager初期化
-    const dockerInitialized = await initializeDockerManager();
-    if (!dockerInitialized) {
-        log.warning("DockerManagerの初期化に失敗しましたが、サーバーを起動します");
-    }
-
-    // receiverコンテナの状態確認
-    if (dockerManager) {
-        try {
-            const receiverHealthy = await dockerManager.checkReceiverHealth();
-            if (!receiverHealthy) {
-                log.warning("Receiverコンテナが正常でない可能性があります");
-            }
-        } catch (error) {
-            log.error(`Receiver health check failed: ${error.message}`);
-        }
+    // ProcessManager初期化
+    const processInitialized = await initializeProcessManager();
+    if (!processInitialized) {
+        log.warning("ProcessManagerの初期化に失敗しましたが、サーバーを起動します");
     }
 
     log.info("システム初期化完了");
@@ -308,6 +348,10 @@ async function startServer() {
     app.listen(port, '0.0.0.0', () => {
         log.info(`サーバーが起動しました: http://0.0.0.0:${port}`);
         log.info("Web UI: http://localhost:8080");
+        log.info("pocスタイルのコントロール:");
+        log.info("1. RTMPストリーム開始: POST /api/rtmp/start");
+        log.info("2. 動画選択・UDP送信: POST /api/switch");
+        log.info("3. ストリーム停止: POST /api/stop, POST /api/rtmp/stop");
     });
 }
 
