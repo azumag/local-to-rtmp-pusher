@@ -19,9 +19,6 @@ app.use(express.static(path.join(__dirname, 'templates')));
 // グローバル状態
 let currentVideo = null;
 let streamStatus = 'stopped';
-let rtmpStreamStatus = 'stopped';
-let relayStatus = 'stopped';
-let currentRelayUrl = null;
 let processManager = null;
 
 // ProcessManager初期化
@@ -48,7 +45,6 @@ app.get('/api/status', async (req, res) => {
         if (!processManager) {
             return res.json({
                 stream_status: 'error',
-                rtmp_stream_status: 'error',
                 current_video: null,
                 error: 'ProcessManager not initialized'
             });
@@ -58,10 +54,7 @@ app.get('/api/status', async (req, res) => {
         
         res.json({
             stream_status: streamStatus,
-            rtmp_stream_status: rtmpStreamStatus,
-            relay_status: relayStatus,
             current_video: currentVideo,
-            current_relay_url: currentRelayUrl,
             process_status: processStatus,
             timestamp: new Date().toISOString()
         });
@@ -207,177 +200,6 @@ app.post('/api/stop', async (req, res) => {
     }
 });
 
-// RTMPストリーム開始
-app.post('/api/rtmp/start', async (req, res) => {
-    try {
-        if (!processManager) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'ProcessManager not initialized' 
-            });
-        }
-
-        const result = await processManager.startRtmpStream();
-
-        if (result.success) {
-            rtmpStreamStatus = 'streaming';
-            log.info('RTMPストリーム開始完了');
-            
-            res.json({
-                success: true,
-                message: 'RTMP stream started successfully'
-            });
-        } else {
-            log.error(`RTMPストリーム開始失敗: ${result.error}`);
-            res.status(500).json({
-                success: false,
-                error: result.error
-            });
-        }
-    } catch (error) {
-        log.error(`RTMP start API error: ${error.message}`);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
-    }
-});
-
-// RTMPストリーム停止
-app.post('/api/rtmp/stop', async (req, res) => {
-    try {
-        if (!processManager) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'ProcessManager not initialized' 
-            });
-        }
-
-        const result = await processManager.stopRtmpStream();
-
-        if (result.success) {
-            rtmpStreamStatus = 'stopped';
-            log.info('RTMPストリーム停止完了');
-            
-            res.json({
-                success: true,
-                message: 'RTMP stream stopped successfully'
-            });
-        } else {
-            log.error(`RTMPストリーム停止失敗: ${result.error}`);
-            res.status(500).json({
-                success: false,
-                error: result.error
-            });
-        }
-    } catch (error) {
-        log.error(`RTMP stop API error: ${error.message}`);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
-    }
-});
-
-// RTMPリレー開始
-app.post('/api/relay/start', async (req, res) => {
-    try {
-        if (!processManager) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'ProcessManager not initialized' 
-            });
-        }
-
-        const { relayUrl, encodingSettings } = req.body;
-        if (!relayUrl) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'relayUrl parameter required' 
-            });
-        }
-
-        // URLバリデーション
-        try {
-            const url = new URL(relayUrl);
-            if (url.protocol !== 'rtmp:') {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Invalid RTMP URL' 
-                });
-            }
-        } catch (e) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Invalid URL format' 
-            });
-        }
-
-        const result = await processManager.startRelay(relayUrl, encodingSettings);
-
-        if (result.success) {
-            relayStatus = 'streaming';
-            currentRelayUrl = relayUrl;
-            log.info(`RTMPリレー開始完了: ${relayUrl}`);
-            
-            res.json({
-                success: true,
-                message: result.message,
-                settings: result.settings
-            });
-        } else {
-            log.error(`RTMPリレー開始失敗: ${result.error}`);
-            res.status(500).json({
-                success: false,
-                error: result.error
-            });
-        }
-    } catch (error) {
-        log.error(`Relay start API error: ${error.message}`);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
-    }
-});
-
-// RTMPリレー停止
-app.post('/api/relay/stop', async (req, res) => {
-    try {
-        if (!processManager) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'ProcessManager not initialized' 
-            });
-        }
-
-        const result = await processManager.stopRelay();
-
-        if (result.success) {
-            relayStatus = 'stopped';
-            currentRelayUrl = null;
-            log.info('RTMPリレー停止完了');
-            
-            res.json({
-                success: true,
-                message: result.message
-            });
-        } else {
-            log.error(`RTMPリレー停止失敗: ${result.error}`);
-            res.status(500).json({
-                success: false,
-                error: result.error
-            });
-        }
-    } catch (error) {
-        log.error(`Relay stop API error: ${error.message}`);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
-    }
-});
-
 // ヘルスチェック
 app.get('/api/health', async (req, res) => {
     try {
@@ -392,9 +214,7 @@ app.get('/api/health', async (req, res) => {
 
         res.json({
             status: 'healthy',
-            rtmp_process: processStatus.rtmp_stream_running,
             udp_process: processStatus.udp_streaming_running,
-            relay_process: processStatus.relay_running,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -452,10 +272,9 @@ async function startServer() {
     app.listen(port, '0.0.0.0', () => {
         log.info(`サーバーが起動しました: http://0.0.0.0:${port}`);
         log.info('Web UI: http://localhost:8080');
-        log.info('pocスタイルのコントロール:');
-        log.info('1. RTMPストリーム開始: POST /api/rtmp/start');
-        log.info('2. 動画選択・UDP送信: POST /api/switch');
-        log.info('3. ストリーム停止: POST /api/stop, POST /api/rtmp/stop');
+        log.info('UDP配信システムコントロール:');
+        log.info('1. 動画選択・UDP送信: POST /api/switch');
+        log.info('2. ストリーム停止: POST /api/stop');
     });
 }
 
