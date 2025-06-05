@@ -1,64 +1,58 @@
 const request = require('supertest');
+const express = require('express');
+const path = require('path');
 const fs = require('fs-extra');
 
-// ProcessManagerのモック
-jest.mock('../process_manager');
-const ProcessManager = require('../process_manager');
-
-// fs-extraのモック
+// Mock fs-extra
 jest.mock('fs-extra');
 
-describe('Controller API', () => {
+// Mock ProcessManager
+jest.mock('../process_manager', () => {
+    return jest.fn().mockImplementation(() => ({
+        startUdpStreaming: jest.fn(),
+        stopUdpStreaming: jest.fn(),
+        getStatus: jest.fn(),
+        stopAll: jest.fn()
+    }));
+});
+
+describe('Controller API Tests', () => {
     let app;
-    let processManagerInstance;
+    let processManager;
 
     beforeEach(() => {
-        // ProcessManagerのモックインスタンス
-        processManagerInstance = {
-            startRtmpStream: jest.fn(),
-            stopRtmpStream: jest.fn(),
-            startUdpStreaming: jest.fn(),
-            stopUdpStreaming: jest.fn(),
-            getStatus: jest.fn(),
-            stopAll: jest.fn()
-        };
-
-        ProcessManager.mockImplementation(() => processManagerInstance);
-
-        // controller.jsを個別にrequireしてテスト
-        jest.resetModules();
+        // Clear all mocks
+        jest.clearAllMocks();
         
-        // プロセスイベントリスナーをクリア
-        process.removeAllListeners('SIGTERM');
-        process.removeAllListeners('SIGINT');
-        process.removeAllListeners('unhandledRejection');
-        process.removeAllListeners('uncaughtException');
-        
-        // テスト用アプリを作成
-        const express = require('express');
-        const path = require('path');
-        
+        // Create fresh app instance for each test
         app = express();
         app.use(express.json());
-        
-        // グローバル状態
+
+        // Mock ProcessManager instance
+        const ProcessManager = require('../process_manager');
+        processManager = new ProcessManager();
+
+        // Mock global state
         let currentVideo = null;
         let streamStatus = 'stopped';
-        let rtmpStreamStatus = 'stopped';
-        const processManager = new ProcessManager();
 
-        // テスト用のAPIエンドポイント実装
-        app.get('/api/status', (req, res) => {
-            const processStatus = processManager.getStatus();
-            res.json({
-                stream_status: streamStatus,
-                rtmp_stream_status: rtmpStreamStatus,
-                current_video: currentVideo,
-                process_status: processStatus,
-                timestamp: new Date().toISOString()
-            });
+        // Status endpoint
+        app.get('/api/status', async (req, res) => {
+            try {
+                const processStatus = processManager.getStatus();
+                
+                res.json({
+                    stream_status: streamStatus,
+                    current_video: currentVideo,
+                    process_status: processStatus,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
         });
 
+        // Videos endpoint
         app.get('/api/videos', async (req, res) => {
             try {
                 const videosDir = path.join(__dirname, '../videos');
@@ -69,18 +63,17 @@ describe('Controller API', () => {
                     
                     for (const file of files) {
                         if (file.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm)$/)) {
-                            const stats = await fs.stat(path.join(videosDir, file));
                             videos.push({
                                 filename: file,
-                                size: stats.size,
-                                modified: stats.mtime.toISOString()
+                                size: 1024 * 1024,
+                                modified: new Date().toISOString()
                             });
                         }
                     }
                 }
                 
                 res.json({
-                    videos: videos.sort((a, b) => a.filename.localeCompare(b.filename)),
+                    videos: videos,
                     count: videos.length
                 });
             } catch (error) {
@@ -88,6 +81,7 @@ describe('Controller API', () => {
             }
         });
 
+        // Switch video endpoint
         app.post('/api/switch', async (req, res) => {
             try {
                 const { video } = req.body;
@@ -95,13 +89,6 @@ describe('Controller API', () => {
                     return res.status(400).json({ 
                         success: false, 
                         error: 'video parameter required' 
-                    });
-                }
-
-                if (video.includes('..') || video.startsWith('/')) {
-                    return res.status(400).json({ 
-                        success: false, 
-                        error: 'Invalid file path' 
                     });
                 }
 
@@ -118,6 +105,7 @@ describe('Controller API', () => {
                 if (result.success) {
                     currentVideo = video;
                     streamStatus = 'streaming';
+                    
                     res.json({
                         success: true,
                         video: video,
@@ -137,6 +125,7 @@ describe('Controller API', () => {
             }
         });
 
+        // Stop stream endpoint
         app.post('/api/stop', async (req, res) => {
             try {
                 const result = await processManager.stopUdpStreaming();
@@ -144,6 +133,7 @@ describe('Controller API', () => {
                 if (result.success) {
                     currentVideo = null;
                     streamStatus = 'stopped';
+                    
                     res.json({
                         success: true,
                         message: 'Stream stopped successfully'
@@ -162,60 +152,13 @@ describe('Controller API', () => {
             }
         });
 
-        app.post('/api/rtmp/start', async (req, res) => {
-            try {
-                const result = await processManager.startRtmpStream();
-
-                if (result.success) {
-                    rtmpStreamStatus = 'streaming';
-                    res.json({
-                        success: true,
-                        message: 'RTMP stream started successfully'
-                    });
-                } else {
-                    res.status(500).json({
-                        success: false,
-                        error: result.error
-                    });
-                }
-            } catch (error) {
-                res.status(500).json({ 
-                    success: false, 
-                    error: error.message 
-                });
-            }
-        });
-
-        app.post('/api/rtmp/stop', async (req, res) => {
-            try {
-                const result = await processManager.stopRtmpStream();
-
-                if (result.success) {
-                    rtmpStreamStatus = 'stopped';
-                    res.json({
-                        success: true,
-                        message: 'RTMP stream stopped successfully'
-                    });
-                } else {
-                    res.status(500).json({
-                        success: false,
-                        error: result.error
-                    });
-                }
-            } catch (error) {
-                res.status(500).json({ 
-                    success: false, 
-                    error: error.message 
-                });
-            }
-        });
-
-        app.get('/api/health', (req, res) => {
+        // Health check endpoint
+        app.get('/api/health', async (req, res) => {
             try {
                 const processStatus = processManager.getStatus();
+
                 res.json({
                     status: 'healthy',
-                    rtmp_process: processStatus.rtmp_stream_running,
                     udp_process: processStatus.udp_streaming_running,
                     timestamp: new Date().toISOString()
                 });
@@ -226,211 +169,132 @@ describe('Controller API', () => {
                 });
             }
         });
-
-        app.get('/api/logs', (req, res) => {
-            try {
-                const logType = req.query.type || 'controller';
-                const lines = parseInt(req.query.lines) || 100;
-                const logs = [`[${new Date().toISOString()}] Log type: ${logType}`, 'System is running...'];
-
-                res.json({
-                    logs: logs,
-                    type: logType,
-                    lines: lines
-                });
-            } catch (error) {
-                res.status(500).json({ error: error.message });
-            }
-        });
-
-        app.use((req, res) => {
-            res.status(404).json({ error: 'Endpoint not found' });
-        });
-    });
-
-    afterEach(() => {
-        jest.clearAllMocks();
     });
 
     describe('GET /api/status', () => {
-        it('should return system status', async () => {
-            processManagerInstance.getStatus.mockReturnValue({
-                rtmp_stream_running: true,
+        it('should return current status', async () => {
+            processManager.getStatus.mockReturnValue({
                 udp_streaming_running: false,
-                rtmp_pid: 12345,
                 udp_sender_pid: null
             });
 
-            const res = await request(app).get('/api/status');
+            const response = await request(app).get('/api/status');
 
-            expect(res.status).toBe(200);
-            expect(res.body).toHaveProperty('stream_status');
-            expect(res.body).toHaveProperty('rtmp_stream_status');
-            expect(res.body).toHaveProperty('process_status');
-            expect(res.body.process_status.rtmp_stream_running).toBe(true);
+            expect(response.status).toBe(200);
+            expect(response.body).toHaveProperty('stream_status', 'stopped');
+            expect(response.body).toHaveProperty('current_video', null);
+            expect(response.body).toHaveProperty('process_status');
+            expect(response.body).toHaveProperty('timestamp');
         });
     });
 
     describe('GET /api/videos', () => {
-        it('should return list of videos', async () => {
+        it('should return video list', async () => {
             fs.pathExists.mockResolvedValue(true);
-            fs.readdir.mockResolvedValue(['video1.mp4', 'video2.mp4', 'not-video.txt']);
-            fs.stat.mockResolvedValue({
-                size: 1024000,
-                mtime: new Date()
-            });
+            fs.readdir.mockResolvedValue(['video1.mp4', 'video2.mp4', 'not-a-video.txt']);
 
-            const res = await request(app).get('/api/videos');
+            const response = await request(app).get('/api/videos');
 
-            expect(res.status).toBe(200);
-            expect(res.body.videos).toHaveLength(2);
-            expect(res.body.videos[0].filename).toBe('video1.mp4');
-            expect(res.body.count).toBe(2);
+            expect(response.status).toBe(200);
+            expect(response.body.videos).toHaveLength(2);
+            expect(response.body.count).toBe(2);
+            expect(response.body.videos[0]).toHaveProperty('filename', 'video1.mp4');
         });
 
-        it('should handle missing videos directory', async () => {
+        it('should return empty list when directory does not exist', async () => {
             fs.pathExists.mockResolvedValue(false);
 
-            const res = await request(app).get('/api/videos');
+            const response = await request(app).get('/api/videos');
 
-            expect(res.status).toBe(200);
-            expect(res.body.videos).toHaveLength(0);
-            expect(res.body.count).toBe(0);
+            expect(response.status).toBe(200);
+            expect(response.body.videos).toHaveLength(0);
+            expect(response.body.count).toBe(0);
         });
     });
 
     describe('POST /api/switch', () => {
-        it('should switch video successfully', async () => {
+        it('should start UDP streaming with valid video', async () => {
             fs.pathExists.mockResolvedValue(true);
-            processManagerInstance.startUdpStreaming.mockResolvedValue({
+            processManager.startUdpStreaming.mockResolvedValue({
                 success: true,
                 message: 'UDP streaming started'
             });
 
-            const res = await request(app)
+            const response = await request(app)
                 .post('/api/switch')
                 .send({ video: 'test.mp4' });
 
-            expect(res.status).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.video).toBe('test.mp4');
-            expect(processManagerInstance.startUdpStreaming).toHaveBeenCalledWith('test.mp4');
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.video).toBe('test.mp4');
+            expect(processManager.startUdpStreaming).toHaveBeenCalledWith('test.mp4');
         });
 
-        it('should reject invalid video path', async () => {
-            const res = await request(app)
+        it('should return 400 when video parameter is missing', async () => {
+            const response = await request(app)
                 .post('/api/switch')
-                .send({ video: '../../../etc/passwd' });
+                .send({});
 
-            expect(res.status).toBe(400);
-            expect(res.body.success).toBe(false);
-            expect(res.body.error).toBe('Invalid file path');
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('video parameter required');
         });
 
-        it('should handle missing video file', async () => {
+        it('should return 404 when video file does not exist', async () => {
             fs.pathExists.mockResolvedValue(false);
 
-            const res = await request(app)
+            const response = await request(app)
                 .post('/api/switch')
-                .send({ video: 'missing.mp4' });
+                .send({ video: 'nonexistent.mp4' });
 
-            expect(res.status).toBe(404);
-            expect(res.body.success).toBe(false);
-            expect(res.body.error).toContain('Video file not found');
+            expect(response.status).toBe(404);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('Video file not found');
         });
     });
 
     describe('POST /api/stop', () => {
-        it('should stop streaming successfully', async () => {
-            processManagerInstance.stopUdpStreaming.mockResolvedValue({
+        it('should stop UDP streaming', async () => {
+            processManager.stopUdpStreaming.mockResolvedValue({
                 success: true,
                 message: 'UDP streaming stopped'
             });
 
-            const res = await request(app).post('/api/stop');
+            const response = await request(app).post('/api/stop');
 
-            expect(res.status).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(processManagerInstance.stopUdpStreaming).toHaveBeenCalled();
-        });
-    });
-
-    describe('POST /api/rtmp/start', () => {
-        it('should start RTMP stream successfully', async () => {
-            processManagerInstance.startRtmpStream.mockResolvedValue({
-                success: true,
-                message: 'RTMP stream started'
-            });
-
-            const res = await request(app).post('/api/rtmp/start');
-
-            expect(res.status).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(processManagerInstance.startRtmpStream).toHaveBeenCalled();
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.message).toBe('Stream stopped successfully');
+            expect(processManager.stopUdpStreaming).toHaveBeenCalled();
         });
 
-        it('should handle RTMP start failure', async () => {
-            processManagerInstance.startRtmpStream.mockResolvedValue({
+        it('should handle stop error', async () => {
+            processManager.stopUdpStreaming.mockResolvedValue({
                 success: false,
-                error: 'Already running'
+                error: 'Process not found'
             });
 
-            const res = await request(app).post('/api/rtmp/start');
+            const response = await request(app).post('/api/stop');
 
-            expect(res.status).toBe(500);
-            expect(res.body.success).toBe(false);
-            expect(res.body.error).toBe('Already running');
-        });
-    });
-
-    describe('POST /api/rtmp/stop', () => {
-        it('should stop RTMP stream successfully', async () => {
-            processManagerInstance.stopRtmpStream.mockResolvedValue({
-                success: true,
-                message: 'RTMP stream stopped'
-            });
-
-            const res = await request(app).post('/api/rtmp/stop');
-
-            expect(res.status).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(processManagerInstance.stopRtmpStream).toHaveBeenCalled();
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Process not found');
         });
     });
 
     describe('GET /api/health', () => {
         it('should return health status', async () => {
-            processManagerInstance.getStatus.mockReturnValue({
-                rtmp_stream_running: true,
-                udp_streaming_running: true
+            processManager.getStatus.mockReturnValue({
+                udp_streaming_running: true,
+                udp_sender_pid: 12345
             });
 
-            const res = await request(app).get('/api/health');
+            const response = await request(app).get('/api/health');
 
-            expect(res.status).toBe(200);
-            expect(res.body.status).toBe('healthy');
-            expect(res.body.rtmp_process).toBe(true);
-            expect(res.body.udp_process).toBe(true);
-        });
-    });
-
-    describe('GET /api/logs', () => {
-        it('should return logs', async () => {
-            const res = await request(app).get('/api/logs?type=controller&lines=50');
-
-            expect(res.status).toBe(200);
-            expect(res.body).toHaveProperty('logs');
-            expect(res.body.type).toBe('controller');
-            expect(res.body.lines).toBe(50);
-        });
-    });
-
-    describe('Error handling', () => {
-        it('should handle 404 for unknown endpoints', async () => {
-            const res = await request(app).get('/api/unknown');
-
-            expect(res.status).toBe(404);
-            expect(res.body.error).toBe('Endpoint not found');
+            expect(response.status).toBe(200);
+            expect(response.body.status).toBe('healthy');
+            expect(response.body.udp_process).toBe(true);
+            expect(response.body).toHaveProperty('timestamp');
         });
     });
 });

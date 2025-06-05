@@ -1,9 +1,19 @@
-const { spawn } = require('child_process');
 const ProcessManager = require('../process_manager');
-const EventEmitter = require('events');
+const { spawn } = require('child_process');
 
-// child_processのモック
-jest.mock('child_process');
+// Mock child_process.spawn
+jest.mock('child_process', () => ({
+    spawn: jest.fn()
+}));
+
+// Enable fake timers
+beforeEach(() => {
+    jest.useFakeTimers();
+});
+
+afterEach(() => {
+    jest.useRealTimers();
+});
 
 describe('ProcessManager', () => {
     let processManager;
@@ -12,87 +22,34 @@ describe('ProcessManager', () => {
     beforeEach(() => {
         processManager = new ProcessManager();
         
-        // プロセスのモックを作成
-        mockProcess = new EventEmitter();
-        mockProcess.kill = jest.fn();
-        mockProcess.pid = 12345;
-        mockProcess.stdout = new EventEmitter();
-        mockProcess.stderr = new EventEmitter();
+        // Reset mocks
+        spawn.mockClear();
+        
+        // Create mock process with event emitter functionality
+        mockProcess = {
+            pid: 12345,
+            stdout: { on: jest.fn() },
+            stderr: { on: jest.fn() },
+            on: jest.fn(),
+            kill: jest.fn(),
+            _events: new Map()
+        };
+        
+        // Mock the event registration to track callbacks
+        mockProcess.on.mockImplementation((event, callback) => {
+            if (!mockProcess._events.has(event)) {
+                mockProcess._events.set(event, []);
+            }
+            mockProcess._events.get(event).push(callback);
+        });
+        
+        // Helper to trigger events
+        mockProcess._trigger = (event, ...args) => {
+            const callbacks = mockProcess._events.get(event) || [];
+            callbacks.forEach(callback => callback(...args));
+        };
         
         spawn.mockReturnValue(mockProcess);
-    });
-
-    afterEach(() => {
-        jest.clearAllMocks();
-    });
-
-    describe('startRtmpStream', () => {
-        it('should start RTMP stream successfully', async () => {
-            const result = await processManager.startRtmpStream();
-
-            expect(result.success).toBe(true);
-            expect(result.message).toBe('RTMP stream started');
-            expect(spawn).toHaveBeenCalledWith('ffmpeg', [
-                '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
-                '-i', 'udp://127.0.0.1:1234?timeout=0&buffer_size=65536',
-                '-c', 'copy',
-                '-f', 'flv',
-                'rtmp://rtmp-server:1935/live/stream'
-            ]);
-        });
-
-        it('should not start if already running', async () => {
-            await processManager.startRtmpStream();
-            const result = await processManager.startRtmpStream();
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBe('RTMP stream already running');
-        });
-
-        it('should handle spawn errors', async () => {
-            spawn.mockImplementation(() => {
-                throw new Error('Spawn error');
-            });
-
-            const result = await processManager.startRtmpStream();
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBe('Spawn error');
-        });
-    });
-
-    describe('stopRtmpStream', () => {
-        it('should stop RTMP stream successfully', async () => {
-            await processManager.startRtmpStream();
-            const result = await processManager.stopRtmpStream();
-
-            expect(result.success).toBe(true);
-            expect(result.message).toBe('RTMP stream stopped');
-            expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
-        });
-
-        it('should handle already stopped stream', async () => {
-            const result = await processManager.stopRtmpStream();
-
-            expect(result.success).toBe(true);
-            expect(result.message).toBe('RTMP stream not running');
-        });
-
-        it('should force kill after timeout', async () => {
-            await processManager.startRtmpStream();
-            
-            const stopPromise = processManager.stopRtmpStream();
-            
-            // タイムアウト後に強制終了される
-            setTimeout(() => {
-                processManager.rtmpProcess = null;
-            }, 100);
-
-            const result = await stopPromise;
-
-            expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
-            expect(result.success).toBe(true);
-        });
     });
 
     describe('startUdpStreaming', () => {
@@ -116,115 +73,111 @@ describe('ProcessManager', () => {
         it('should stop existing stream before starting new one', async () => {
             await processManager.startUdpStreaming('first.mp4');
             
-            // 最初のプロセスを保存
-            const firstProcess = processManager.udpSenderProcess;
+            // Start the second streaming (which will stop the first one)
+            const startPromise = processManager.startUdpStreaming('second.mp4');
             
-            // 新しいプロセスのために別のモックを作成
-            const newMockProcess = new EventEmitter();
-            newMockProcess.kill = jest.fn();
-            newMockProcess.pid = 54321;
-            newMockProcess.stdout = new EventEmitter();
-            newMockProcess.stderr = new EventEmitter();
+            // Simulate the first process closing when killed
+            mockProcess._trigger('close', 0);
             
-            spawn.mockReturnValueOnce(newMockProcess);
-            
-            const stopPromise = processManager.startUdpStreaming('second.mp4');
-            
-            // 最初のプロセスの停止をシミュレート
-            setTimeout(() => {
-                if (firstProcess === processManager.udpSenderProcess) {
-                    processManager.udpSenderProcess = null;
-                }
-            }, 100);
+            const result = await startPromise;
 
-            await stopPromise;
-
-            expect(spawn).toHaveBeenCalledTimes(2);
+            expect(result.success).toBe(true);
+            expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
         });
     });
 
     describe('stopUdpStreaming', () => {
         it('should stop UDP streaming successfully', async () => {
             await processManager.startUdpStreaming('test.mp4');
-            const result = await processManager.stopUdpStreaming();
+            
+            // Start the stop operation
+            const stopPromise = processManager.stopUdpStreaming();
+            
+            // Trigger the close event
+            mockProcess._trigger('close', 0);
+            
+            const result = await stopPromise;
 
             expect(result.success).toBe(true);
             expect(result.message).toBe('UDP streaming stopped');
             expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
         });
+
+        it('should handle already stopped stream', async () => {
+            const result = await processManager.stopUdpStreaming();
+
+            expect(result.success).toBe(true);
+            expect(result.message).toBe('UDP streaming not running');
+        });
+
+        it('should force kill after timeout', async () => {
+            await processManager.startUdpStreaming('test.mp4');
+            
+            const stopPromise = processManager.stopUdpStreaming();
+            
+            // Advance timers to trigger the timeout (5000ms)
+            jest.advanceTimersByTime(5000);
+            
+            const result = await stopPromise;
+
+            expect(result.success).toBe(true);
+            expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+            expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+        });
     });
 
     describe('getStatus', () => {
-        it('should return correct status when processes are running', async () => {
-            await processManager.startRtmpStream();
+        it('should return correct status when process is running', async () => {
             await processManager.startUdpStreaming('test.mp4');
             
             const status = processManager.getStatus();
 
-            expect(status.rtmp_stream_running).toBe(true);
             expect(status.udp_streaming_running).toBe(true);
-            expect(status.rtmp_pid).toBe(12345);
             expect(status.udp_sender_pid).toBe(12345);
         });
 
-        it('should return correct status when processes are not running', () => {
+        it('should return correct status when process is not running', () => {
             const status = processManager.getStatus();
 
-            expect(status.rtmp_stream_running).toBe(false);
             expect(status.udp_streaming_running).toBe(false);
-            expect(status.rtmp_pid).toBe(null);
             expect(status.udp_sender_pid).toBe(null);
         });
     });
 
     describe('stopAll', () => {
-        it('should stop all processes', async () => {
-            await processManager.startRtmpStream();
+        it('should stop all processes (UDP only)', async () => {
             await processManager.startUdpStreaming('test.mp4');
             
+            // Start the stop operation
             const stopPromise = processManager.stopAll();
             
-            // プロセス停止をシミュレート
-            setTimeout(() => {
-                processManager.rtmpProcess = null;
-                processManager.udpSenderProcess = null;
-            }, 100);
-
+            // Trigger the close event
+            mockProcess._trigger('close', 0);
+            
             const result = await stopPromise;
 
             expect(result.success).toBe(true);
-            expect(result.results).toHaveLength(3); // Now includes relay stop
+            expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
         });
     });
 
     describe('process events', () => {
         it('should handle process close event', async () => {
-            await processManager.startRtmpStream();
-            
-            mockProcess.emit('close', 0);
-            
-            // イベントループが処理されるまで少し待つ
-            await new Promise(resolve => setImmediate(resolve));
+            await processManager.startUdpStreaming('test.mp4');
 
-            expect(processManager.rtmpProcess).toBe(null);
+            // Simulate process close
+            mockProcess._trigger('close', 0);
+
+            expect(processManager.udpSenderProcess).toBe(null);
         });
 
         it('should handle process error event', async () => {
-            await processManager.startRtmpStream();
-            
-            // エラーハンドリングを設定
-            const originalError = console.error;
-            console.error = jest.fn();
-            
-            mockProcess.emit('error', new Error('Process error'));
-            
-            // イベントループが処理されるまで少し待つ
-            await new Promise(resolve => setImmediate(resolve));
+            await processManager.startUdpStreaming('test.mp4');
 
-            expect(processManager.rtmpProcess).toBe(null);
-            
-            // console.errorを元に戻す
-            console.error = originalError;
+            // Simulate process error
+            mockProcess._trigger('error', new Error('Process error'));
+
+            expect(processManager.udpSenderProcess).toBe(null);
         });
     });
 });
