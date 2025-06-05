@@ -1,0 +1,241 @@
+name: Controller CI Pipeline
+
+on:
+  push:
+    branches: [main, development, 'feature/**', 'fix/**']
+    paths:
+      - 'controller/**'
+      - '.github/workflows/controller-ci.yml'
+  pull_request:
+    branches: [main, development]
+    paths:
+      - 'controller/**'
+      - '.github/workflows/controller-ci.yml'
+
+jobs:
+  test:
+    name: Test Controller
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: controller/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./controller
+        run: npm ci
+
+      - name: Run lint
+        working-directory: ./controller
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: ./controller
+        run: npm run test:coverage
+
+      - name: Upload coverage reports to Codecov
+        if: matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./controller/coverage
+          flags: controller
+          name: controller-coverage
+          fail_ci_if_error: false
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: controller/package-lock.json
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        working-directory: ./controller
+        run: npm ci
+
+      - name: Create test video files
+        working-directory: ./videos
+        run: |
+          # Create dummy video files for testing
+          ffmpeg -f lavfi -i testsrc=duration=5:size=320x240:rate=1 -f lavfi -i sine=frequency=1000:duration=5 -c:v libx264 -c:a aac -shortest test1.mp4
+          ffmpeg -f lavfi -i testsrc=duration=3:size=320x240:rate=1 -f lavfi -i sine=frequency=500:duration=3 -c:v libx264 -c:a aac -shortest test2.mp4
+
+      - name: Start controller in background
+        working-directory: ./controller
+        run: |
+          npm start &
+          echo $! > controller.pid
+
+      - name: Wait for controller to start
+        run: |
+          timeout=30
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8080/api/health; then
+              echo "Controller is ready!"
+              break
+            fi
+            echo "Waiting for controller... ($elapsed/$timeout seconds)"
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          if [ $elapsed -ge $timeout ]; then
+            echo "Controller failed to start"
+            exit 1
+          fi
+
+      - name: Test API endpoints
+        run: |
+          # Test status endpoint
+          curl -f http://localhost:8080/api/status
+          
+          # Test videos endpoint
+          curl -f http://localhost:8080/api/videos
+          
+          # Test health endpoint
+          curl -f http://localhost:8080/api/health
+
+      - name: Stop controller
+        working-directory: ./controller
+        run: |
+          if [ -f controller.pid ]; then
+            kill $(cat controller.pid) || true
+            rm controller.pid
+          fi
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './controller'
+          format: 'sarif'
+          output: 'trivy-controller.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-controller.sarif'
+          category: 'trivy-controller'
+
+  docker-test:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create Dockerfile for controller
+        run: |
+          cat > controller/Dockerfile << 'EOF'
+          FROM node:20-alpine
+          
+          WORKDIR /app
+          
+          # Install FFmpeg
+          RUN apk add --no-cache ffmpeg
+          
+          # Copy package files
+          COPY package*.json ./
+          
+          # Install dependencies
+          RUN npm ci --only=production
+          
+          # Copy application code
+          COPY . .
+          
+          # Create videos directory
+          RUN mkdir -p /app/videos
+          
+          # Expose port
+          EXPOSE 8080
+          
+          # Health check
+          HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+            CMD curl -f http://localhost:8080/api/health || exit 1
+          
+          # Start application
+          CMD ["npm", "start"]
+          EOF
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./controller
+          push: false
+          tags: udp-streaming-controller:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker image
+        run: |
+          # Run container in background
+          docker run -d --name controller-test -p 8080:8080 udp-streaming-controller:test
+          
+          # Wait for container to be ready
+          timeout=60
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if docker exec controller-test curl -f http://localhost:8080/api/health; then
+              echo "Container is ready!"
+              break
+            fi
+            echo "Waiting for container... ($elapsed/$timeout seconds)"
+            sleep 3
+            elapsed=$((elapsed + 3))
+          done
+          
+          if [ $elapsed -ge $timeout ]; then
+            echo "Container failed to start properly"
+            docker logs controller-test
+            exit 1
+          fi
+          
+          # Test basic endpoints
+          docker exec controller-test curl -f http://localhost:8080/api/status
+          docker exec controller-test curl -f http://localhost:8080/api/videos
+          
+          # Clean up
+          docker stop controller-test
+          docker rm controller-test

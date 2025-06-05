@@ -273,10 +273,10 @@
         <div class="header">
             <h1>UDP配信システム制御画面</h1>
             <div class="status-bar">
-                <div class="status-item">
+                <!-- <div class="status-item">
                     <div class="status-indicator" id="rtmpStatus"></div>
                     <span>RTMPストリーム: <strong id="rtmpStatusText">読み込み中...</strong></span>
-                </div>
+                </div> -->
                 <div class="status-item">
                     <div class="status-indicator" id="streamStatus"></div>
                     <span>UDP配信: <strong id="streamStatusText">読み込み中...</strong></span>
@@ -290,8 +290,10 @@
             </div>
         </div>
 
+        <div id="alerts"></div>
+
         <div class="main-content">
-            <div class="panel">
+            <!-- <div class="panel">
                 <h2>RTMPストリーム制御</h2>
                 <p style="margin-bottom: 15px; color: #7f8c8d;">
                     まずRTMPストリームを開始してください (UDP受信→RTMP配信)
@@ -300,7 +302,7 @@
                     <button class="btn" onclick="startRtmpStream()" id="rtmpStartBtn">RTMPストリーム開始</button>
                     <button class="btn danger" onclick="stopRtmpStream()" id="rtmpStopBtn" disabled>RTMPストリーム停止</button>
                 </div>
-            </div>
+            </div> -->
 
             <div class="panel">
                 <h2>動画選択・UDP配信</h2>
@@ -319,25 +321,96 @@
             </div>
         </div>
 
+        <!-- <div class="panel" style="margin-bottom: 20px;">
+            <h2>RTMPリレー制御</h2>
+            <p style="margin-bottom: 15px; color: #7f8c8d;">
+                内蔵RTMPストリームを外部サーバーにリレー配信
+            </p>
+            <div style="margin-bottom: 15px;">
+                <label for="relayUrl" style="display: block; margin-bottom: 5px; font-weight: 500;">リレー先URL:</label>
+                <input type="text" id="relayUrl" placeholder="rtmp://example.com/live/stream" 
+                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 500;">エンコーディング設定:</label>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">映像ビットレート:</label>
+                            <input type="text" id="videoBitrate" value="2500k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">音声ビットレート:</label>
+                            <input type="text" id="audioBitrate" value="128k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">最大レート:</label>
+                            <input type="text" id="maxrate" value="2500k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">バッファサイズ:</label>
+                            <input type="text" id="bufsize" value="5000k" 
+                                   style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9em; color: #555;">プリセット:</label>
+                            <select id="preset" style="width: 100%; padding: 5px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px;">
+                                <option value="ultrafast">ultrafast</option>
+                                <option value="superfast">superfast</option>
+                                <option value="veryfast" selected>veryfast</option>
+                                <option value="faster">faster</option>
+                                <option value="fast">fast</option>
+                                <option value="medium">medium</option>
+                                <option value="slow">slow</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-buttons">
+                <button class="btn" onclick="startRelay()" id="relayStartBtn" disabled>リレー開始</button>
+                <button class="btn danger" onclick="stopRelay()" id="relayStopBtn" disabled>リレー停止</button>
+                <button class="btn" onclick="resetEncodingSettings()">デフォルト設定に戻す</button>
+            </div>
+            
+            <div id="relayStatus" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; display: none;">
+                <strong>リレー状態:</strong> <span id="relayStatusText">--</span><br>
+                <strong>リレー先:</strong> <span id="currentRelayUrl">--</span>
+            </div>
+        </div> -->
+
         <div class="panel" style="margin-bottom: 20px;">
             <h2>システム状況</h2>
             <div class="stats-grid">
-                <div class="stat-card">
+                <!-- <div class="stat-card">
                     <div class="stat-label">RTMPプロセス</div>
                     <div class="stat-value" id="rtmpProcessStatus">--</div>
-                </div>
+                </div> -->
                 <div class="stat-card">
                     <div class="stat-label">UDPプロセス</div>
                     <div class="stat-value" id="udpProcessStatus">--</div>
                 </div>
-                <div class="stat-card">
+                <!-- <div class="stat-card">
                     <div class="stat-label">RTMP PID</div>
                     <div class="stat-value" id="rtmpPid">--</div>
-                </div>
+                </div> -->
                 <div class="stat-card">
                     <div class="stat-label">UDP PID</div>
                     <div class="stat-value" id="udpPid">--</div>
                 </div>
+                <!-- <div class="stat-card">
+                    <div class="stat-label">リレープロセス</div>
+                    <div class="stat-value" id="relayProcessStatus">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">リレー PID</div>
+                    <div class="stat-value" id="relayPid">--</div>
+                </div> -->
             </div>
             <div class="control-buttons">
                 <button class="btn" onclick="refreshStatus()">ステータス更新</button>
@@ -345,7 +418,7 @@
             </div>
         </div>
 
-        <div class="logs-panel">
+        <!-- <div class="logs-panel">
             <h2>システムログ</h2>
             <div class="log-controls">
                 <select id="logType" onchange="refreshLogs()">
@@ -357,10 +430,9 @@
                 <button class="btn" onclick="clearLogs()">クリア</button>
             </div>
             <div class="log-output" id="logOutput">ログを読み込み中...</div>
-        </div>
+        </div> -->
     </div>
 
-    <div id="alerts"></div>
 
     <script>
         let currentVideoFile = null;
@@ -381,7 +453,7 @@
         function refreshAll() {
             refreshStatus();
             refreshVideos();
-            refreshLogs();
+            // refreshLogs();  // コメントアウト
         }
 
         // ステータス更新
@@ -391,16 +463,16 @@
                 const data = await response.json();
                 
                 // RTMPストリーム状況更新
-                const rtmpStatusIndicator = document.getElementById('rtmpStatus');
-                const rtmpStatusText = document.getElementById('rtmpStatusText');
+                // const rtmpStatusIndicator = document.getElementById('rtmpStatus');
+                // const rtmpStatusText = document.getElementById('rtmpStatusText');
                 
-                if (data.rtmp_stream_status === 'streaming') {
-                    rtmpStatusIndicator.className = 'status-indicator streaming';
-                    rtmpStatusText.textContent = '配信中';
-                } else {
-                    rtmpStatusIndicator.className = 'status-indicator stopped';
-                    rtmpStatusText.textContent = '停止中';
-                }
+                // if (data.rtmp_stream_status === 'streaming') {
+                //     rtmpStatusIndicator.className = 'status-indicator streaming';
+                //     rtmpStatusText.textContent = '配信中';
+                // } else {
+                //     rtmpStatusIndicator.className = 'status-indicator stopped';
+                //     rtmpStatusText.textContent = '停止中';
+                // }
                 
                 // UDPストリーム状況更新
                 const udpStatusIndicator = document.getElementById('streamStatus');
@@ -420,23 +492,40 @@
                 
                 // プロセス状況更新
                 if (data.process_status) {
-                    document.getElementById('rtmpProcessStatus').textContent = data.process_status.rtmp_stream_running ? 'Running' : 'Stopped';
+                    // document.getElementById('rtmpProcessStatus').textContent = data.process_status.rtmp_stream_running ? 'Running' : 'Stopped';
                     document.getElementById('udpProcessStatus').textContent = data.process_status.udp_streaming_running ? 'Running' : 'Stopped';
-                    document.getElementById('rtmpPid').textContent = data.process_status.rtmp_pid || '--';
+                    // document.getElementById('relayProcessStatus').textContent = data.process_status.relay_running ? 'Running' : 'Stopped';
+                    // document.getElementById('rtmpPid').textContent = data.process_status.rtmp_pid || '--';
                     document.getElementById('udpPid').textContent = data.process_status.udp_sender_pid || '--';
+                    // document.getElementById('relayPid').textContent = data.process_status.relay_pid || '--';
                 }
                 
                 // ボタン状態更新
                 document.getElementById('stopBtn').disabled = data.stream_status !== 'streaming';
-                document.getElementById('rtmpStartBtn').disabled = data.rtmp_stream_status === 'streaming';
-                document.getElementById('rtmpStopBtn').disabled = data.rtmp_stream_status !== 'streaming';
+                // document.getElementById('rtmpStartBtn').disabled = data.rtmp_stream_status === 'streaming';
+                // document.getElementById('rtmpStopBtn').disabled = data.rtmp_stream_status !== 'streaming';
+                
+                // リレーボタン状態更新
+                // document.getElementById('relayStartBtn').disabled = data.rtmp_stream_status !== 'streaming' || data.relay_status === 'streaming';
+                // document.getElementById('relayStopBtn').disabled = data.relay_status !== 'streaming';
+                
+                // リレー状態表示更新
+                // if (data.relay_status === 'streaming') {
+                //     document.getElementById('relayStatus').style.display = 'block';
+                //     document.getElementById('relayStatusText').textContent = '配信中';
+                //     document.getElementById('currentRelayUrl').textContent = data.current_relay_url || '--';
+                // } else {
+                //     document.getElementById('relayStatus').style.display = 'none';
+                //     document.getElementById('relayStatusText').textContent = '停止中';
+                //     document.getElementById('currentRelayUrl').textContent = '--';
+                // }
                 
                 // 最終更新時刻
                 document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString();
                 
             } catch (error) {
                 console.error('Status refresh error:', error);
-                showAlert('ステータス更新エラー: ' + error.message, 'error');
+                alert('ステータス更新エラー: ' + error.message);
             }
         }
 
@@ -479,14 +568,15 @@
                 
             } catch (error) {
                 console.error('Video refresh error:', error);
-                showAlert('動画一覧更新エラー: ' + error.message, 'error');
+                alert('動画一覧更新エラー: ' + error.message);
             }
         }
 
         // 動画切り替え（UDP配信開始）
         async function switchVideo(videoFile) {
             try {
-                showAlert(`UDP配信開始中: ${videoFile}`, 'warning');
+                // Show loading feedback (optional for warning-type messages)
+                console.log(`UDP配信開始中: ${videoFile}`);
                 
                 const response = await fetch('/api/switch', {
                     method: 'POST',
@@ -499,15 +589,15 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert(`UDP配信開始: ${videoFile}`, 'success');
+                    alert(`UDP配信開始: ${videoFile}`);
                     refreshAll();
                 } else {
-                    showAlert('UDP配信開始エラー: ' + data.error, 'error');
+                    alert('UDP配信開始エラー: ' + data.error);
                 }
                 
             } catch (error) {
                 console.error('Switch video error:', error);
-                showAlert('UDP配信開始エラー: ' + error.message, 'error');
+                alert('UDP配信開始エラー: ' + error.message);
             }
         }
 
@@ -516,7 +606,7 @@
             if (!confirm('UDP配信を停止しますか？')) return;
             
             try {
-                showAlert('UDP配信を停止中...', 'warning');
+                console.log('UDP配信を停止中...');
                 
                 const response = await fetch('/api/stop', {
                     method: 'POST'
@@ -525,142 +615,177 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert('UDP配信を停止しました', 'success');
+                    alert('UDP配信を停止しました');
                     refreshAll();
                 } else {
-                    showAlert('UDP配信停止エラー: ' + data.error, 'error');
+                    alert('UDP配信停止エラー: ' + data.error);
                 }
                 
             } catch (error) {
                 console.error('Stop stream error:', error);
-                showAlert('UDP配信停止エラー: ' + error.message, 'error');
+                alert('UDP配信停止エラー: ' + error.message);
             }
         }
 
         // ログ更新
-        async function refreshLogs() {
-            try {
-                const logType = document.getElementById('logType').value;
-                const response = await fetch(`/api/logs?type=${logType}&lines=100`);
-                const data = await response.json();
+        // async function refreshLogs() {
+        //     try {
+        //         const logType = document.getElementById('logType').value;
+        //         const response = await fetch(`/api/logs?type=${logType}&lines=100`);
+        //         const data = await response.json();
                 
-                const logOutput = document.getElementById('logOutput');
-                if (data.logs && Array.isArray(data.logs)) {
-                    logOutput.textContent = data.logs.join('\n');
-                    logOutput.scrollTop = logOutput.scrollHeight;
-                } else {
-                    logOutput.textContent = 'ログデータが取得できませんでした';
-                }
+        //         const logOutput = document.getElementById('logOutput');
+        //         if (data.logs && Array.isArray(data.logs)) {
+        //             logOutput.textContent = data.logs.join('\n');
+        //             logOutput.scrollTop = logOutput.scrollHeight;
+        //         } else {
+        //             logOutput.textContent = 'ログデータが取得できませんでした';
+        //         }
                 
-            } catch (error) {
-                console.error('Log refresh error:', error);
-                document.getElementById('logOutput').textContent = 'ログ取得エラー: ' + error.message;
-            }
-        }
+        //     } catch (error) {
+        //         console.error('Log refresh error:', error);
+        //         document.getElementById('logOutput').textContent = 'ログ取得エラー: ' + error.message;
+        //     }
+        // }
 
         // ログクリア
-        function clearLogs() {
-            document.getElementById('logOutput').textContent = '';
-        }
+        // function clearLogs() {
+        //     document.getElementById('logOutput').textContent = '';
+        // }
 
         // RTMPストリーム開始
-        async function startRtmpStream() {
-            try {
-                showAlert('RTMPストリームを開始中...', 'warning');
+        // async function startRtmpStream() {
+        //     try {
+        //         showAlert('RTMPストリームを開始中...', 'warning');
                 
-                const response = await fetch('/api/rtmp/start', {
-                    method: 'POST'
-                });
+        //         const response = await fetch('/api/rtmp/start', {
+        //             method: 'POST'
+        //         });
                 
-                const data = await response.json();
+        //         const data = await response.json();
                 
-                if (data.success) {
-                    showAlert('RTMPストリームを開始しました', 'success');
-                    refreshAll();
-                } else {
-                    showAlert('RTMPストリーム開始エラー: ' + data.error, 'error');
-                }
+        //         if (data.success) {
+        //             showAlert('RTMPストリームを開始しました', 'success');
+        //             refreshAll();
+        //         } else {
+        //             showAlert('RTMPストリーム開始エラー: ' + data.error, 'error');
+        //         }
                 
-            } catch (error) {
-                console.error('RTMP start error:', error);
-                showAlert('RTMPストリーム開始エラー: ' + error.message, 'error');
-            }
-        }
+        //     } catch (error) {
+        //         console.error('RTMP start error:', error);
+        //         showAlert('RTMPストリーム開始エラー: ' + error.message, 'error');
+        //     }
+        // }
 
         // RTMPストリーム停止
-        async function stopRtmpStream() {
-            if (!confirm('RTMPストリームを停止しますか？')) return;
+        // async function stopRtmpStream() {
+        //     if (!confirm('RTMPストリームを停止しますか？')) return;
             
-            try {
-                showAlert('RTMPストリームを停止中...', 'warning');
+        //     try {
+        //         showAlert('RTMPストリームを停止中...', 'warning');
                 
-                const response = await fetch('/api/rtmp/stop', {
-                    method: 'POST'
-                });
+        //         const response = await fetch('/api/rtmp/stop', {
+        //             method: 'POST'
+        //         });
                 
-                const data = await response.json();
+        //         const data = await response.json();
                 
-                if (data.success) {
-                    showAlert('RTMPストリームを停止しました', 'success');
-                    refreshAll();
-                } else {
-                    showAlert('RTMPストリーム停止エラー: ' + data.error, 'error');
-                }
+        //         if (data.success) {
+        //             showAlert('RTMPストリームを停止しました', 'success');
+        //             refreshAll();
+        //         } else {
+        //             showAlert('RTMPストリーム停止エラー: ' + data.error, 'error');
+        //         }
                 
-            } catch (error) {
-                console.error('RTMP stop error:', error);
-                showAlert('RTMPストリーム停止エラー: ' + error.message, 'error');
-            }
-        }
+        //     } catch (error) {
+        //         console.error('RTMP stop error:', error);
+        //         showAlert('RTMPストリーム停止エラー: ' + error.message, 'error');
+        //     }
+        // }
 
-        // ヘルスチェック
-        async function showHealth() {
-            try {
-                const response = await fetch('/api/health');
-                const data = await response.json();
-                
-                if (data.status === 'healthy') {
-                    showAlert('システムは正常に動作しています', 'success');
-                } else {
-                    showAlert('システムに問題があります: ' + (data.error || 'Unknown error'), 'warning');
-                }
-                
-            } catch (error) {
-                console.error('Health check error:', error);
-                showAlert('ヘルスチェックエラー: ' + error.message, 'error');
-            }
-        }
+        // RTMPリレー開始
+        // async function startRelay() {
+        //     try {
+        //         const relayUrl = document.getElementById('relayUrl').value.trim();
+        //         if (!relayUrl) {
+        //             showAlert('リレー先URLを入力してください', 'error');
+        //             return;
+        //         }
 
-        // アラート表示
-        function showAlert(message, type = 'info') {
-            const alertsContainer = document.getElementById('alerts');
-            const alert = document.createElement('div');
-            alert.className = `alert ${type}`;
-            alert.textContent = message;
+        //         // エンコーディング設定を収集
+        //         const encodingSettings = {
+        //             videoBitrate: document.getElementById('videoBitrate').value,
+        //             audioBitrate: document.getElementById('audioBitrate').value,
+        //             maxrate: document.getElementById('maxrate').value,
+        //             bufsize: document.getElementById('bufsize').value,
+        //             preset: document.getElementById('preset').value
+        //         };
+
+        //         showAlert('RTMPリレーを開始中...', 'warning');
+                
+        //         const response = await fetch('/api/relay/start', {
+        //             method: 'POST',
+        //             headers: {
+        //                 'Content-Type': 'application/json'
+        //             },
+        //             body: JSON.stringify({
+        //                 relayUrl: relayUrl,
+        //                 encodingSettings: encodingSettings
+        //             })
+        //         });
+                
+        //         const data = await response.json();
+                
+        //         if (data.success) {
+        //             showAlert('RTMPリレーを開始しました', 'success');
+        //             document.getElementById('relayStatus').style.display = 'block';
+        //             refreshAll();
+        //         } else {
+        //             showAlert('RTMPリレー開始エラー: ' + data.error, 'error');
+        //         }
+                
+        //     } catch (error) {
+        //         console.error('Relay start error:', error);
+        //         showAlert('RTMPリレー開始エラー: ' + error.message, 'error');
+        //     }
+        // }
+
+        // RTMPリレー停止
+        // async function stopRelay() {
+        //     if (!confirm('RTMPリレーを停止しますか？')) return;
             
-            alertsContainer.appendChild(alert);
-            
-            // 5秒後に自動削除
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.parentNode.removeChild(alert);
-                }
-            }, 5000);
-        }
+        //     try {
+        //         showAlert('RTMPリレーを停止中...', 'warning');
+                
+        //         const response = await fetch('/api/relay/stop', {
+        //             method: 'POST'
+        //         });
+                
+        //         const data = await response.json();
+                
+        //         if (data.success) {
+        //             showAlert('RTMPリレーを停止しました', 'success');
+        //             document.getElementById('relayStatus').style.display = 'none';
+        //             refreshAll();
+        //         } else {
+        //             showAlert('RTMPリレー停止エラー: ' + data.error, 'error');
+        //         }
+                
+        //     } catch (error) {
+        //         console.error('Relay stop error:', error);
+        //         showAlert('RTMPリレー停止エラー: ' + error.message, 'error');
+        //     }
+        // }
 
-        // ユーティリティ関数
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        }
-
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ja-JP') + ' ' + date.toLocaleTimeString('ja-JP');
-        }
+        // エンコーディング設定をデフォルトに戻す
+        // function resetEncodingSettings() {
+        //     document.getElementById('videoBitrate').value = '2500k';
+        //     document.getElementById('audioBitrate').value = '128k';
+        //     document.getElementById('maxrate').value = '2500k';
+        //     document.getElementById('bufsize').value = '5000k';
+        //     document.getElementById('preset').value = 'veryfast';
+        //     showAlert('エンコーディング設定をデフォルトに戻しました', 'success');
+        // }
 
         // ページ離脱時に自動更新停止
         window.addEventListener('beforeunload', function() {

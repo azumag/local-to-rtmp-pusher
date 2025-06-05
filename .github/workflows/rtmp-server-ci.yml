@@ -1,0 +1,123 @@
+name: RTMP Server CI Pipeline
+
+on:
+  push:
+    branches: [main, development, 'feature/**', 'fix/**']
+    paths:
+      - 'rtmp-server/**'
+      - '.github/workflows/rtmp-server-ci.yml'
+  pull_request:
+    branches: [main, development]
+    paths:
+      - 'rtmp-server/**'
+      - '.github/workflows/rtmp-server-ci.yml'
+
+jobs:
+  docker-test:
+    name: RTMP Server Docker Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./rtmp-server
+          push: false
+          tags: rtmp-server:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test RTMP server container
+        run: |
+          # Run RTMP server in background
+          docker run -d --name rtmp-test -p 1935:1935 -p 8080:80 rtmp-server:test
+          
+          # Wait for container to be ready
+          timeout=30
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if docker ps | grep rtmp-test | grep -q "Up"; then
+              echo "RTMP server container is running!"
+              break
+            fi
+            echo "Waiting for RTMP server... ($elapsed/$timeout seconds)"
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          
+          if [ $elapsed -ge $timeout ]; then
+            echo "RTMP server failed to start"
+            docker logs rtmp-test
+            exit 1
+          fi
+          
+          # Test nginx stats endpoint (if available)
+          sleep 5
+          if curl -f http://localhost:8080/stat 2>/dev/null; then
+            echo "Stats endpoint is accessible"
+          else
+            echo "Stats endpoint not accessible (this may be expected)"
+          fi
+          
+          # Check if RTMP port is listening
+          if docker exec rtmp-test netstat -ln | grep ":1935"; then
+            echo "RTMP port 1935 is listening"
+          else
+            echo "RTMP port 1935 is not listening"
+            docker logs rtmp-test
+            exit 1
+          fi
+          
+          # Clean up
+          docker stop rtmp-test
+          docker rm rtmp-test
+
+  config-validation:
+    name: Validate nginx configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+
+      - name: Validate nginx configuration
+        run: |
+          # Test configuration syntax
+          sudo nginx -t -c $(pwd)/rtmp-server/nginx.conf
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner on Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'tiangolo/nginx-rtmp:latest'
+          format: 'sarif'
+          output: 'trivy-rtmp.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-rtmp.sarif'
+          category: 'trivy-rtmp'

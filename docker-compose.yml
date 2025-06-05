@@ -50,6 +50,22 @@ services:
           cpus: '0.2'
           memory: 256M
 
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    container_name: streaming-relay
+    hostname: relay
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.11
+    depends_on:
+      - rtmp-server
+    environment:
+      - RELAY_TARGET=${RELAY_TARGET:-rtmp://}
+      - RTMP_SERVER=${RTMP_SERVER}
+    restart: unless-stopped
+
   controller:
     build:
       context: .
@@ -70,10 +86,10 @@ services:
       - DOCKER_API_VERSION=1.41
       - UDP_TARGET=${UDP_HOST:-172.20.0.10}:${UDP_PORT:-1234}
       - RTMP_SERVER=${RTMP_SERVER}
-      - STREAM_KEY=${STREAM_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       - receiver
+      - relay
       - rtmp-server
     restart: unless-stopped
     deploy:
