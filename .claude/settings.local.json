@@ -91,7 +91,9 @@
       "Bash(docker inspect:*)",
       "Bash(npx husky add:*)",
       "Bash(npx jest:*)",
-      "Bash(npm ci:*)"
+      "Bash(npm ci:*)",
+      "Bash(npm start)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }
