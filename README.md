@@ -23,17 +23,31 @@
 
 StreamCaster uses a multi-container architecture for optimal performance and reliability:
 
-```
-┌─────────────────┐    UDP:1234     ┌─────────────────┐    RTMP     ┌─────────────────┐
-│   Controller    │◄─────────────► │    Receiver     │────────────►│  RTMP Servers   │
-│   (Web UI)      │                │   (FFmpeg)      │             │ (Twitch/YouTube)│
-└─────────────────┘                └─────────────────┘             └─────────────────┘
-         │                                   ▲
-         ▼                                   │
-┌─────────────────┐                         │
-│   Relay         │─────────────────────────┘
-│   (FFmpeg)      │
-└─────────────────┘
+```marmaid
+graph TD
+    A[Controller] -->|UDP Stream| B[Receiver]
+    B -->|RTMP| C[RTMP Server]
+    C -->|Pull| D[OBS]
+    C -->|Pull| F[Relay]
+    F -->|再エンコード + Push| G[配信先]
+    
+    subgraph "ストリーミングシステム"
+        A
+        B
+        C
+        F
+    end
+    
+    subgraph "外部システム"
+        D
+        E
+        G
+    end
+    
+    style A fill:#e1f5fe
+    style B fill:#e8f5e8
+    style C fill:#fff3e0
+    style F fill:#fce4ec
 ```
 
 ### Components
