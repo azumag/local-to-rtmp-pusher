@@ -1,194 +1,834 @@
-# UDP配信システム (Local-to-RTMP Pusher)
+# StreamCaster
 
-動的動画切り替え可能なUDP→RTMP配信システム
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Node.js](https://img.shields.io/badge/node.js-18%2B-green.svg)
+![Docker](https://img.shields.io/badge/docker-required-blue.svg)
+![FFmpeg](https://img.shields.io/badge/ffmpeg-required-red.svg)
 
-## 🚀 クイックスタート
+**StreamCaster** is a professional-grade UDP-to-RTMP streaming system that enables dynamic video switching without interrupting live streams. Perfect for content creators, live streaming setups, and broadcast applications.
 
-### 1. システム起動
+## ✨ Key Features
+
+- 🎥 **Dynamic Video Switching** - Change videos seamlessly during live streams
+- 🌐 **Web-based Control Panel** - Intuitive browser interface for stream management
+- 📡 **Multiple Platform Support** - Stream to Twitch, YouTube, Facebook Live, and custom RTMP servers
+- 🔄 **Zero-Downtime Switching** - Switch videos without dropping the RTMP connection
+- 📊 **Real-time Monitoring** - Live status updates, resource monitoring, and health checks
+- 🐳 **Docker-based Architecture** - Containerized for easy deployment and scaling
+- 🧪 **Comprehensive Testing** - Full test suite with CI/CD pipeline
+- 📚 **RESTful API** - Complete API for programmatic control
+- 🛡️ **Production Ready** - Built for reliability and performance
+
+## 🏗️ Architecture
+
+StreamCaster uses a multi-container architecture for optimal performance and reliability:
+
+```
+┌─────────────────┐    UDP:1234     ┌─────────────────┐    RTMP     ┌─────────────────┐
+│   Controller    │◄─────────────► │    Receiver     │────────────►│  RTMP Servers   │
+│   (Web UI)      │                │   (FFmpeg)      │             │ (Twitch/YouTube)│
+└─────────────────┘                └─────────────────┘             └─────────────────┘
+         │                                   ▲
+         ▼                                   │
+┌─────────────────┐                         │
+│   Relay         │─────────────────────────┘
+│   (FFmpeg)      │
+└─────────────────┘
+```
+
+### Components
+
+| Component | Purpose | Technology |
+|-----------|---------|------------|
+| **Controller** | Web UI, API, Process Management | Node.js + Express |
+| **Receiver** | UDP to RTMP conversion | FFmpeg |
+| **Relay** | Dynamic video switching | FFmpeg |
+| **RTMP Server** | Local testing server | Nginx + RTMP module |
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Docker & Docker Compose
+- 4GB+ RAM
+- 2+ CPU cores
+- 10GB+ disk space
+
+### 1. Clone & Setup
+
 ```bash
-# 全サービス起動（ローカルRTMPサーバー含む）
+git clone https://github.com/azumag/streamcaster.git
+cd streamcaster
+
+# Install dependencies
+npm install
+
+# Prepare video directory
+mkdir -p videos
+cp your-videos/* videos/
+```
+
+### 2. Start Services
+
+```bash
+# Start all services
 docker-compose up -d
 
-# ログ確認
+# Check status
+docker-compose ps
+
+# View logs
 docker-compose logs -f
 ```
 
-### 2. Web UI アクセス
-- 制御画面: http://localhost:8080
-- RTMP統計: http://localhost:8081/stat
+### 3. Access Web Interface
 
-### 3. 動画ファイル準備
+- **Control Panel**: http://localhost:8080
+- **RTMP Stats**: http://localhost:8081/stat
+
+### 4. Start Streaming
+
+1. Open the web interface
+2. Select a video file
+3. Click "Start Streaming"
+4. Stream URL: `rtmp://localhost:1935/live/stream`
+
+## 📦 Installation
+
+### Development Setup
+
 ```bash
-# videos/ディレクトリに動画ファイルを配置
-cp your-video.mp4 videos/
+# Clone repository
+git clone https://github.com/azumag/streamcaster.git
+cd streamcaster
+
+# Install Node.js dependencies
+npm install
+
+# Install controller dependencies
+cd controller
+npm install
+
+# Run tests
+npm test
+
+# Start development server
+npm run dev
 ```
 
-### 4. 配信開始
-1. Web UIで動画ファイルを選択
-2. 「選択」ボタンをクリック
-3. 配信状況を確認
+### Production Deployment
 
-## 📁 システム構成
-
-```
-UDP配信システム
-├── rtmp-server/          # ローカルRTMPサーバー
-├── controller/           # Web UI + API
-├── scripts/             # 運用スクリプト
-├── config/              # 設定ファイル
-├── videos/              # 動画ファイル
-└── logs/                # ログファイル
-```
-
-## 🔧 設定
-
-### ローカルテスト（デフォルト）
 ```bash
-# .env の設定
-RTMP_SERVER=rtmp://rtmp-server:1935/live
-STREAM_KEY=test-stream
-```
+# Create production environment file
+cp .env.example .env.production
 
-### 外部配信（Twitch等）
-```bash
-# .env を編集
-RTMP_SERVER=rtmp://live.twitch.tv/live
-STREAM_KEY=your_actual_stream_key
+# Edit configuration
+vim .env.production
 
-# 本番環境で起動
+# Deploy with production settings
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-## 🎮 配信視聴
+### Manual Installation
 
-### VLCで視聴
-1. VLC を開く
-2. `Media` > `Open Network Stream`
-3. URL: `rtmp://localhost:1935/live/test-stream`
-4. `Play` をクリック
-
-### FFplayで視聴
 ```bash
-ffplay rtmp://localhost:1935/live/test-stream
-```
+# Install system dependencies
+sudo apt update
+sudo apt install ffmpeg docker.io docker-compose nodejs npm
 
-## 📊 監視・メンテナンス
+# Clone and setup project
+git clone https://github.com/azumag/streamcaster.git
+cd streamcaster
+npm install
 
-### ヘルスチェック
-```bash
-# システム状態確認
-./scripts/health_check.sh
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
 
-# 連続監視
-./scripts/health_check.sh --watch
-```
-
-### ログ確認
-```bash
-# 全ログ
-docker-compose logs
-
-# 特定サービス
-docker-compose logs receiver
-docker-compose logs rtmp-server
-```
-
-### 手動操作
-```bash
-# Sender起動
-./scripts/start_sender.sh video.mp4
-
-# Sender停止
-./scripts/stop_sender.sh
-
-# 全Sender停止
-./scripts/stop_sender.sh --all
-```
-
-## 🛠️ トラブルシューティング
-
-### よくある問題
-
-**1. 動画が再生されない**
-```bash
-# コンテナ状態確認
-docker-compose ps
-
-# ネットワーク確認
-docker network ls | grep streaming
-```
-
-**2. Web UIにアクセスできない**
-```bash
-# ポート確認
-netstat -tlnp | grep 8080
-
-# コントローラーログ確認
-docker-compose logs controller
-```
-
-**3. RTMPストリームが開始されない**
-```bash
-# RTMPサーバー状態確認
-curl http://localhost:8081/stat
-
-# Receiverログ確認
-docker-compose logs receiver
-```
-
-### リセット方法
-```bash
-# 全停止・削除
-docker-compose down -v
-
-# イメージ再ビルド
-docker-compose build --no-cache
-
-# クリーン起動
+# Start services
 docker-compose up -d
 ```
 
-## 📈 パフォーマンス
+## 🎮 Usage
 
-### 推奨スペック
-- CPU: 2コア以上
-- メモリ: 2GB以上
-- ディスク: 10GB以上の空き容量
+### Web Interface
 
-### リソース使用量
-- Receiver: CPU 5-15%, メモリ 50-100MB
-- Controller: CPU 2-5%, メモリ 50MB
-- RTMP Server: CPU 2-5%, メモリ 50MB
+The web interface provides complete control over your streaming setup:
 
-## 🔒 セキュリティ
+#### Dashboard Features
+- **Live Status Display** - Current streaming status and video
+- **Video Library** - Browse and manage your video files
+- **Stream Controls** - Start, stop, and switch streams
+- **Real-time Monitoring** - CPU, memory, and network usage
+- **Log Viewer** - Real-time system logs
 
-### 本番環境での注意点
-1. RTMPストリームキーを適切に管理
-2. Web UIにアクセス制限を設定
-3. ファイアウォール設定を確認
-4. ログローテーションを設定
+#### Basic Operations
 
-## 📚 API リファレンス
+1. **Start Streaming**
+   - Select video from library
+   - Click "Start Stream"
+   - Monitor status in dashboard
 
-### REST API
-- `GET /api/status` - システム状況取得
-- `GET /api/videos` - 動画一覧取得
-- `POST /api/switch` - 動画切り替え
-- `POST /api/stop` - 配信停止
-- `GET /api/health` - ヘルスチェック
-- `GET /api/logs` - ログ取得
+2. **Switch Videos**
+   - Select new video while streaming
+   - Click "Switch" for seamless transition
+   - No stream interruption
 
-### 使用例
+3. **Stop Streaming**
+   - Click "Stop Stream"
+   - Safely terminates all processes
+
+### API Usage
+
+Complete RESTful API for programmatic control:
+
+#### Stream Control
+
 ```bash
-# 動画切り替え
-curl -X POST http://localhost:8080/api/switch \
-     -H "Content-Type: application/json" \
-     -d '{"video": "test-video.mp4"}'
-
-# ステータス確認
+# Get current status
 curl http://localhost:8080/api/status
+
+# List available videos
+curl http://localhost:8080/api/videos
+
+# Start/switch video
+curl -X POST http://localhost:8080/api/switch \
+  -H "Content-Type: application/json" \
+  -d '{"video": "your-video.mp4"}'
+
+# Stop streaming
+curl -X POST http://localhost:8080/api/stop
+
+# Health check
+curl http://localhost:8080/api/health
 ```
 
-## 📄 ライセンス
+#### Response Examples
 
-本プロジェクトは実証目的で作成されており、本番環境での使用には追加の考慮が必要です。
+```json
+// GET /api/status
+{
+  "stream_status": "streaming",
+  "current_video": "demo.mp4",
+  "process_status": {
+    "udp_streaming_running": true,
+    "udp_sender_pid": 1234
+  },
+  "timestamp": "2024-06-05T12:00:00.000Z"
+}
+
+// GET /api/videos
+{
+  "videos": [
+    {
+      "filename": "demo.mp4",
+      "size": 52428800,
+      "modified": "2024-06-05T10:30:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+### Command Line Tools
+
+```bash
+# Health monitoring
+./scripts/health_check.sh
+
+# Manual process control
+./scripts/start_sender.sh video.mp4
+./scripts/stop_sender.sh
+
+# Container management
+docker-compose restart receiver
+docker-compose logs controller
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create `.env` file with your configuration:
+
+```bash
+# RTMP Configuration
+RTMP_SERVER=rtmp://live.twitch.tv/live
+STREAM_KEY=your_stream_key_here
+
+# Network Settings
+UDP_PORT=1234
+HTTP_PORT=8080
+RTMP_PORT=1935
+
+# Resource Limits
+CONTROLLER_CPU_LIMIT=0.5
+RECEIVER_CPU_LIMIT=1.0
+CONTROLLER_MEMORY_LIMIT=512m
+RECEIVER_MEMORY_LIMIT=1g
+
+# Logging
+LOG_LEVEL=info
+TZ=Asia/Tokyo
+
+# Docker Settings
+COMPOSE_PROJECT_NAME=streamcaster
+DOCKER_BUILDKIT=1
+```
+
+### Platform-Specific Configurations
+
+#### Twitch
+```bash
+RTMP_SERVER=rtmp://live.twitch.tv/live
+STREAM_KEY=live_1234567890_abcdefghijklmnop
+```
+
+#### YouTube Live
+```bash
+RTMP_SERVER=rtmp://a.rtmp.youtube.com/live2
+STREAM_KEY=your-youtube-stream-key
+```
+
+#### Facebook Live
+```bash
+RTMP_SERVER=rtmp://live-api-s.facebook.com:80/rtmp
+STREAM_KEY=your-facebook-stream-key
+```
+
+#### Custom RTMP Server
+```bash
+RTMP_SERVER=rtmp://your-server.com/live
+STREAM_KEY=your-custom-key
+```
+
+### Video Settings
+
+Supported formats and recommended settings:
+
+| Setting | Recommended | Supported |
+|---------|-------------|-----------|
+| **Container** | MP4 | MP4, MOV, AVI, MKV |
+| **Video Codec** | H.264 | H.264, H.265 |
+| **Audio Codec** | AAC | AAC, MP3 |
+| **Resolution** | 1920x1080 | Any |
+| **Framerate** | 30fps | 24-60fps |
+| **Bitrate** | 2-6 Mbps | 1-50 Mbps |
+
+## 📡 API Reference
+
+### Stream Management
+
+#### GET /api/status
+Returns current streaming status and system information.
+
+**Response:**
+```json
+{
+  "stream_status": "streaming|stopped|error",
+  "current_video": "filename.mp4|null",
+  "process_status": {
+    "udp_streaming_running": boolean,
+    "udp_sender_pid": number|null
+  },
+  "timestamp": "ISO-8601-datetime"
+}
+```
+
+#### POST /api/switch
+Start streaming or switch to a different video.
+
+**Request:**
+```json
+{
+  "video": "filename.mp4"
+}
+```
+
+**Response:**
+```json
+{
+  "success": boolean,
+  "message": "string",
+  "video": "filename.mp4",
+  "status": "streaming"
+}
+```
+
+#### POST /api/stop
+Stop current streaming session.
+
+**Response:**
+```json
+{
+  "success": boolean,
+  "message": "Stream stopped successfully"
+}
+```
+
+### Video Management
+
+#### GET /api/videos
+List all available video files.
+
+**Response:**
+```json
+{
+  "videos": [
+    {
+      "filename": "video.mp4",
+      "size": 52428800,
+      "modified": "2024-06-05T10:30:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+### System Monitoring
+
+#### GET /api/health
+System health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "healthy|unhealthy",
+  "udp_process": boolean,
+  "timestamp": "ISO-8601-datetime"
+}
+```
+
+### Error Responses
+
+All endpoints return standardized error responses:
+
+```json
+{
+  "success": false,
+  "error": "Error description",
+  "code": "ERROR_CODE"
+}
+```
+
+**Common Error Codes:**
+- `VIDEO_NOT_FOUND` - Specified video file doesn't exist
+- `PROCESS_START_FAILED` - Failed to start streaming process
+- `INVALID_REQUEST` - Malformed request data
+- `SYSTEM_ERROR` - Internal system error
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+streamcaster/
+├── controller/                 # Node.js controller service
+│   ├── __tests__/             # Test files
+│   ├── templates/             # Web UI templates
+│   ├── controller.js          # Main application
+│   ├── process_manager.js     # Process management
+│   └── package.json           # Dependencies
+├── scripts/                   # Utility scripts
+│   ├── health_check.sh        # Health monitoring
+│   ├── start_sender.sh        # Process control
+│   └── stop_sender.sh         # Process control
+├── rtmp-server/               # Local RTMP server
+├── videos/                    # Video file storage
+├── logs/                      # Application logs
+├── docker-compose.yml         # Docker configuration
+└── README.md                  # This file
+```
+
+### Development Workflow
+
+```bash
+# Start development environment
+npm run dev
+
+# Run tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Check code quality
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+
+# Run full CI pipeline
+npm run ci
+```
+
+### Testing
+
+StreamCaster includes comprehensive test coverage:
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage report
+npm run test:coverage
+
+# Run specific test file
+npm test -- controller.test.js
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+**Test Categories:**
+- Unit tests for individual components
+- Integration tests for API endpoints
+- End-to-end tests for complete workflows
+- Performance tests for resource usage
+
+### Code Quality
+
+We maintain high code quality standards:
+
+- **ESLint** - Code style and error checking
+- **Jest** - Comprehensive testing framework
+- **GitHub Actions** - Automated CI/CD pipeline
+- **Husky** - Pre-commit hooks for quality gates
+
+### Contributing
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Make changes and add tests
+4. Run quality checks: `npm run ci`
+5. Commit changes: `git commit -m 'Add amazing feature'`
+6. Push to branch: `git push origin feature/amazing-feature`
+7. Create Pull Request
+
+## 🚀 Deployment
+
+### Production Environment
+
+For production deployment, use the production compose file:
+
+```bash
+# Create production environment
+cp .env.example .env.production
+
+# Configure production settings
+vim .env.production
+
+# Deploy with production optimizations
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Production Checklist
+
+- [ ] Set secure RTMP server credentials
+- [ ] Configure resource limits appropriately
+- [ ] Set up log rotation
+- [ ] Configure firewall rules
+- [ ] Set up monitoring and alerting
+- [ ] Configure backup strategy
+- [ ] Test failover procedures
+
+### Scaling Considerations
+
+For high-volume streaming scenarios:
+
+```yaml
+# docker-compose.scale.yml
+version: '3.8'
+services:
+  receiver:
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2g
+```
+
+### Load Balancing
+
+For multiple streaming destinations:
+
+```bash
+# Start multiple receivers
+docker-compose up -d --scale receiver=3
+
+# Configure load balancer
+# See nginx.conf.example for configuration
+```
+
+## 📊 Monitoring & Troubleshooting
+
+### Health Monitoring
+
+Built-in health check system:
+
+```bash
+# Manual health check
+./scripts/health_check.sh
+
+# Continuous monitoring
+./scripts/health_check.sh --watch
+
+# Docker health checks
+docker-compose ps
+```
+
+### Log Analysis
+
+Comprehensive logging for troubleshooting:
+
+```bash
+# View all logs
+docker-compose logs
+
+# Follow specific service logs
+docker-compose logs -f controller
+docker-compose logs -f receiver
+
+# Filter by timestamp
+docker-compose logs --since="2024-06-05T10:00:00"
+
+# Export logs for analysis
+docker-compose logs > streamcaster.log
+```
+
+### Performance Monitoring
+
+Monitor system resources:
+
+```bash
+# Container resource usage
+docker stats
+
+# System resource usage
+top
+htop
+iotop
+
+# Network monitoring
+netstat -tlnp
+ss -tlnp
+```
+
+### Common Issues & Solutions
+
+#### Stream Won't Start
+```bash
+# Check video file permissions
+ls -la videos/
+
+# Verify Docker containers are running
+docker-compose ps
+
+# Check FFmpeg processes
+ps aux | grep ffmpeg
+
+# Review controller logs
+docker-compose logs controller
+```
+
+#### High CPU Usage
+```bash
+# Check resource limits
+docker-compose config
+
+# Monitor container resources
+docker stats
+
+# Adjust CPU limits in docker-compose.yml
+```
+
+#### Network Issues
+```bash
+# Check port availability
+netstat -tlnp | grep 8080
+netstat -tlnp | grep 1935
+
+# Test RTMP connectivity
+ffmpeg -f lavfi -i testsrc -f flv rtmp://your-server/live/key
+
+# Verify Docker network
+docker network ls
+docker network inspect streamcaster_streaming-network
+```
+
+### Recovery Procedures
+
+Automated recovery for common failures:
+
+```bash
+# Complete system restart
+docker-compose down
+docker-compose up -d
+
+# Clean restart with rebuild
+docker-compose down -v
+docker-compose build --no-cache
+docker-compose up -d
+
+# Reset to known good state
+git pull origin main
+docker-compose down -v
+docker-compose up -d --build
+```
+
+## 📈 Performance & Scaling
+
+### System Requirements
+
+#### Minimum Requirements
+- **CPU**: 2 cores
+- **RAM**: 2GB
+- **Storage**: 10GB
+- **Network**: 10 Mbps upload
+
+#### Recommended Production
+- **CPU**: 4+ cores
+- **RAM**: 8GB+
+- **Storage**: 100GB+ SSD
+- **Network**: 50+ Mbps upload
+
+### Performance Optimization
+
+#### Video Encoding
+```bash
+# Optimize video files for streaming
+ffmpeg -i input.mp4 \
+  -c:v libx264 -preset medium -crf 23 \
+  -c:a aac -b:a 128k \
+  -movflags +faststart \
+  output.mp4
+```
+
+#### Container Optimization
+```yaml
+# Optimized resource allocation
+services:
+  controller:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+```
+
+### Scaling Strategies
+
+#### Horizontal Scaling
+- Multiple receiver containers
+- Load balancing across streams
+- Geographic distribution
+
+#### Vertical Scaling  
+- Increased CPU/memory allocation
+- High-performance storage
+- Dedicated network interfaces
+
+## 🔒 Security
+
+### Security Best Practices
+
+#### Network Security
+- Use private networks for internal communication
+- Implement firewall rules for external access
+- Use VPN for remote management
+- Regular security updates
+
+#### Access Control
+```bash
+# Restrict web interface access
+# Configure nginx proxy with authentication
+
+# Secure RTMP endpoints
+# Use strong stream keys
+# Implement IP whitelisting
+```
+
+#### Data Protection
+- Encrypt RTMP streams when possible
+- Secure video file storage
+- Regular backup procedures
+- Access logging and monitoring
+
+### Production Security Checklist
+
+- [ ] Change default passwords/keys
+- [ ] Configure HTTPS for web interface
+- [ ] Set up proper firewall rules
+- [ ] Enable audit logging
+- [ ] Regular security updates
+- [ ] Backup and recovery testing
+- [ ] Access control implementation
+
+## ❓ FAQ
+
+### General Questions
+
+**Q: Can I stream to multiple platforms simultaneously?**
+A: Yes, you can configure multiple receiver containers for different platforms. See the scaling section for details.
+
+**Q: What video formats are supported?**
+A: Any format supported by FFmpeg (MP4, MOV, AVI, MKV, etc.). H.264/AAC is recommended for best compatibility.
+
+**Q: Is there a limit to video file size?**
+A: No hard limit, but consider storage space and network bandwidth for large files.
+
+### Technical Questions
+
+**Q: Can I use this without Docker?**
+A: Yes, but Docker is highly recommended. Manual installation requires FFmpeg, Node.js, and proper process management.
+
+**Q: How do I add custom FFmpeg parameters?**
+A: Modify the process_manager.js file or create custom scripts in the scripts/ directory.
+
+**Q: Can I run this on ARM processors (Raspberry Pi)?**
+A: Yes, but performance may be limited. Use ARM-compatible Docker images.
+
+### Troubleshooting
+
+**Q: Stream is choppy or has artifacts**
+A: Check CPU usage, reduce video bitrate, or increase hardware resources.
+
+**Q: Web interface is not accessible**
+A: Verify port 8080 is not blocked and the controller container is running.
+
+**Q: RTMP connection fails**
+A: Verify stream key and server URL. Check network connectivity and firewall rules.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Contributors
+
+- **Development Team** - Core system architecture and implementation
+- **Community** - Bug reports, feature requests, and testing
+
+## 🔗 Related Projects
+
+- [FFmpeg](https://ffmpeg.org/) - Multimedia processing library
+- [Nginx RTMP Module](https://github.com/arut/nginx-rtmp-module) - RTMP server implementation
+- [OBS Studio](https://obsproject.com/) - Broadcasting software
+- [Node Media Server](https://github.com/illuspas/Node-Media-Server) - Node.js RTMP server
+
+## 📞 Support
+
+- **Documentation**: This README and inline code comments
+- **Issues**: [GitHub Issues](https://github.com/azumag/streamcaster/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/azumag/streamcaster/discussions)
+
+---
+
+**StreamCaster** - Professional streaming made simple. 🎬✨
