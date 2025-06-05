@@ -7,7 +7,7 @@
     "controller"
   ],
   "scripts": {
-    "prepare": "husky install",
+    "prepare": "husky install || true",
     "controller:start": "cd controller && npm start",
     "controller:test": "cd controller && npm test",
     "controller:lint": "cd controller && npm run lint",
