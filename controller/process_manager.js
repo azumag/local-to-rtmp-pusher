@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const { exit } = require('process');
 
 class ProcessManager {
     constructor() {
@@ -25,11 +26,14 @@ class ProcessManager {
             
             // ffmpeg -i "udp://127.0.0.1:1234?timeout=0" -c copy -f flv rtmp://localhost:1936/live/stream
             const args = [
-                '-i', 'udp://127.0.0.1:1234?timeout=0',
+                '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
+                '-i', 'udp://127.0.0.1:1234?timeout=0&buffer_size=65536',
                 '-c', 'copy',
                 '-f', 'flv',
-                'rtmp://localhost:1936/live/stream'
+                'rtmp://rtmp-server:1935/live/stream'
             ];
+
+            this.log.info(`FFmpegコマンド: ffmpeg ${args.join(' ')}`);
 
             this.rtmpProcess = spawn('ffmpeg', args);
 
@@ -110,16 +114,22 @@ class ProcessManager {
             this.log.info(`UDPストリーミング開始: ${videoFile}`);
             
             // 動画ファイルのパスを構築
-            const videoPath = path.join(__dirname, '../videos', videoFile);
+            const videoPath = path.join(__dirname, 'videos', videoFile);
             
             // ffmpeg -re -i videoA.mp4 -c copy -f mpegts udp://127.0.0.1:1234
             const args = [
                 '-re',
+                '-stream_loop', '-1',
                 '-i', videoPath,
+                '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
                 '-c', 'copy',
                 '-f', 'mpegts',
-                'udp://127.0.0.1:1234'
+                '-buffer_size', '65536',
+                // 'udp://127.0.0.1:1234'
+                'udp://receiver:1234'
             ];
+
+            this.log.info(`FFmpegコマンド: ffmpeg ${args.join(' ')}`);
 
             this.udpSenderProcess = spawn('ffmpeg', args);
 
@@ -220,7 +230,7 @@ class ProcessManager {
 
             // ffmpegコマンドを構築
             const args = [
-                '-i', 'rtmp://localhost:1936/live/stream',
+                '-i', 'rtmp://rtmp-server:1935/live/stream',
                 '-c:v', settings.videoCodec,
                 '-preset', settings.preset,
                 '-b:v', settings.videoBitrate,
@@ -231,6 +241,8 @@ class ProcessManager {
                 '-f', 'flv',
                 relayUrl
             ];
+
+            this.log.info(`FFmpegコマンド: ffmpeg ${args.join(' ')}`);
 
             this.relayProcess = spawn('ffmpeg', args);
 
@@ -245,11 +257,13 @@ class ProcessManager {
             this.relayProcess.on('close', (code) => {
                 this.log.info(`Relayプロセス終了: code ${code}`);
                 this.relayProcess = null;
+                exit(code || 0); // プロセス終了時にアプリケーションを終了
             });
 
             this.relayProcess.on('error', (error) => {
                 this.log.error(`Relayプロセスエラー: ${error.message}`);
                 this.relayProcess = null;
+                exit(1); // プロセス終了時にアプリケーションを終了
             });
 
             return { 
