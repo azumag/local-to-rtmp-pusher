@@ -180,4 +180,59 @@ describe('ProcessManager', () => {
             expect(processManager.udpSenderProcess).toBe(null);
         });
     });
+
+    describe('switching state management', () => {
+        it('should reject new requests when switching is in progress', async () => {
+            // Start first streaming (don't await yet)
+            processManager.startUdpStreaming('first.mp4');
+            
+            // Try to start second streaming immediately (should be rejected)
+            const result = await processManager.startUdpStreaming('second.mp4');
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Process is currently switching. Please wait.');
+        });
+
+        it('should set is_switching flag during process switching', () => {
+            // Initially not switching
+            let status = processManager.getStatus();
+            console.log('Initial status:', status);
+            expect(status.is_switching).toBe(false);
+            
+            // Start streaming process (without await to check intermediate state)
+            console.log('Before calling startUdpStreaming');
+            processManager.startUdpStreaming('test.mp4');
+            console.log('After calling startUdpStreaming');
+            
+            // Check that switching flag is now true (synchronously set)
+            status = processManager.getStatus();
+            console.log('Status after startUdpStreaming:', status);
+            expect(status.is_switching).toBe(true);
+        });
+
+        it('should reset switching state on error', async () => {
+            // Mock spawn to throw an error
+            spawn.mockImplementation(() => {
+                throw new Error('Spawn failed');
+            });
+            
+            const result = await processManager.startUdpStreaming('test.mp4');
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Spawn failed');
+            
+            // Switching state should be reset
+            const status = processManager.getStatus();
+            expect(status.is_switching).toBe(false);
+        });
+
+        it('should include is_switching in getStatus response', async () => {
+            const status = processManager.getStatus();
+            
+            expect(status).toHaveProperty('is_switching');
+            expect(status).toHaveProperty('udp_streaming_running');
+            expect(status).toHaveProperty('udp_sender_pid');
+            expect(typeof status.is_switching).toBe('boolean');
+        });
+    });
 });

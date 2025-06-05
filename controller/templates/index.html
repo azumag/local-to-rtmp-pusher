@@ -65,6 +65,11 @@
             animation: pulse 2s infinite;
         }
         
+        .status-indicator.switching {
+            background: #f39c12;
+            animation: pulse-orange 1.5s infinite;
+        }
+        
         .status-indicator.stopped {
             background: #e74c3c;
         }
@@ -78,6 +83,18 @@
             }
             100% {
                 box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+            }
+        }
+        
+        @keyframes pulse-orange {
+            0% {
+                box-shadow: 0 0 0 0 rgba(243, 156, 18, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(243, 156, 18, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(243, 156, 18, 0);
             }
         }
         
@@ -395,6 +412,7 @@
         let refreshInterval = null;
         let googledriveFiles = [];
         let activeTab = 'local';
+        let isSwitchingVideo = false; // 切り替え中フラグ
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
@@ -405,7 +423,7 @@
 
         // 自動更新開始
         function startAutoRefresh() {
-            refreshInterval = setInterval(refreshStatus, 5000);
+            refreshInterval = setInterval(refreshStatus, 2000); // 更新頻度を2秒に高速化
         }
 
         // 全体更新
@@ -424,14 +442,132 @@
                 const streamStatusIndicator = document.getElementById('streamStatus');
                 const streamStatusText = document.getElementById('streamStatusText');
                 
+                // 全ての動画選択ボタンを取得
+                const allVideoButtons = document.querySelectorAll('.video-item button');
+                const stopBtn = document.getElementById('stopBtn');
+                
+                // 最優先: streaming状態の処理（フラグに関係なく）
                 if (data.stream_status === 'streaming') {
+                    isSwitchingVideo = false; // フラグを解除
                     streamStatusIndicator.className = 'status-indicator streaming';
                     streamStatusText.textContent = '配信中';
-                    document.getElementById('stopBtn').disabled = false;
-                } else {
+                    // 配信中は選択ボタンを有効化、停止ボタンも有効化
+                    allVideoButtons.forEach(btn => {
+                        const originalText = btn.getAttribute('data-original-text');
+                        if (originalText) {
+                            btn.textContent = originalText;
+                            btn.removeAttribute('data-original-text');
+                        }
+                        btn.disabled = false;
+                    });
+                    stopBtn.disabled = false;
+                    
+                    // 配信開始時にファイルリストを更新（アクティブファイルの表示更新）
+                    if (currentVideoSource === 'googledrive' && googledriveFiles.length > 0) {
+                        displayGoogleDriveFiles(googledriveFiles);
+                    } else {
+                        refreshVideos(); // ローカルファイルの更新
+                    }
+                } else if (data.stream_status === 'stopped') {
+                    // 停止状態も最優先で処理（フラグに関係なく）
+                    isSwitchingVideo = false; // フラグを解除
                     streamStatusIndicator.className = 'status-indicator stopped';
                     streamStatusText.textContent = '停止中';
-                    document.getElementById('stopBtn').disabled = true;
+                    allVideoButtons.forEach(btn => {
+                        const originalText = btn.getAttribute('data-original-text');
+                        if (originalText) {
+                            btn.textContent = originalText;
+                            btn.removeAttribute('data-original-text');
+                        }
+                        btn.disabled = false;
+                    });
+                    stopBtn.disabled = true;
+                    
+                    // 停止時にファイルリストを更新（アクティブファイル表示をリセット）
+                    if (googledriveFiles.length > 0) {
+                        displayGoogleDriveFiles(googledriveFiles);
+                    }
+                    refreshVideos(); // ローカルファイルも更新
+                } else if (data.stream_status === 'downloading') {
+                    // downloading状態は常に優先処理（フラグに関係なく）
+                    streamStatusIndicator.className = 'status-indicator switching';
+                    streamStatusText.textContent = 'ダウンロード中...';
+                    // ダウンロード中は全ボタンを無効化
+                    allVideoButtons.forEach(btn => {
+                        btn.disabled = true;
+                        // 「ダウンロード中...」のボタンはそのまま維持
+                        if (btn.textContent === 'ダウンロード中...') {
+                            // すでに正しい状態なので何もしない
+                        } else if (btn.textContent !== '切り替え中...' && 
+                                   btn.textContent !== '待機中...' &&
+                                   !btn.getAttribute('data-original-text')) {
+                            // まだ変更されていないボタンを待機中に
+                            btn.setAttribute('data-original-text', btn.textContent);
+                            btn.textContent = '待機中...';
+                        }
+                    });
+                    stopBtn.disabled = true;
+                    // ダウンロード中は切り替えフラグを維持
+                } else if (!isSwitchingVideo) {
+                    // 切り替え中フラグが立っている場合は、ボタン状態を変更しない（downloading以外）
+                    if (data.stream_status === 'switching') {
+                        streamStatusIndicator.className = 'status-indicator switching';
+                        streamStatusText.textContent = '切り替え中...';
+                        // 切り替え中は全ボタンを無効化（すでに特殊なテキストがあるボタンは維持）
+                        allVideoButtons.forEach(btn => {
+                            btn.disabled = true;
+                            if (btn.textContent !== '切り替え中...' && 
+                                btn.textContent !== 'ダウンロード中...' && 
+                                btn.textContent !== '待機中...' &&
+                                !btn.getAttribute('data-original-text')) {
+                                btn.setAttribute('data-original-text', btn.textContent);
+                                btn.textContent = '待機中...';
+                            }
+                        });
+                        stopBtn.disabled = true;
+                    } else if (data.stream_status === 'streaming') {
+                        streamStatusIndicator.className = 'status-indicator streaming';
+                        streamStatusText.textContent = '配信中';
+                        // 配信中は選択ボタンを有効化、停止ボタンも有効化
+                        allVideoButtons.forEach(btn => {
+                            const originalText = btn.getAttribute('data-original-text');
+                            if (originalText) {
+                                btn.textContent = originalText;
+                                btn.removeAttribute('data-original-text');
+                            }
+                            btn.disabled = false;
+                            // data-temp-disabledを削除
+                            btn.removeAttribute('data-temp-disabled');
+                        });
+                        stopBtn.disabled = false;
+                        // 配信が開始されたら切り替えフラグを解除
+                        isSwitchingVideo = false;
+                    } else {
+                        streamStatusIndicator.className = 'status-indicator stopped';
+                        streamStatusText.textContent = '停止中';
+                        // 停止中は選択ボタンを有効化、停止ボタンは無効化
+                        allVideoButtons.forEach(btn => {
+                            const originalText = btn.getAttribute('data-original-text');
+                            if (originalText) {
+                                btn.textContent = originalText;
+                                btn.removeAttribute('data-original-text');
+                            }
+                            btn.disabled = false;
+                            // data-temp-disabledを削除
+                            btn.removeAttribute('data-temp-disabled');
+                        });
+                        stopBtn.disabled = true;
+                        // 停止状態になったら切り替えフラグを解除
+                        isSwitchingVideo = false;
+                    }
+                } else {
+                    // 切り替え中フラグが立っている場合は、ステータス表示のみ更新
+                    if (data.stream_status === 'switching') {
+                        // 切り替え中はステータス表示のみ更新
+                        streamStatusIndicator.className = 'status-indicator switching';
+                        streamStatusText.textContent = '切り替え中...';
+                    }
+                    // streaming, stopped, downloadingは上で処理済み
                 }
                 
                 // 現在の動画更新
@@ -453,7 +589,8 @@
                 document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString();
                 
                 // Google Driveファイルリストも現在の状態に合わせて更新
-                if (googledriveFiles.length > 0) {
+                // ただし、ダウンロード中はボタン再生成を避ける
+                if (googledriveFiles.length > 0 && data.stream_status !== 'downloading') {
                     displayGoogleDriveFiles(googledriveFiles);
                 }
                 
@@ -486,6 +623,10 @@
                         
                         const isActive = video.filename === currentVideoFile && currentVideoSource === 'local';
                         
+                        const buttonHtml = isActive ? 
+                            '<button class="btn" disabled>配信中</button>' :
+                            `<button class="btn" data-filename="${video.filename}">選択</button>`;
+                        
                         videoItem.innerHTML = `
                             <div class="video-info">
                                 <div class="video-name">
@@ -494,11 +635,16 @@
                                 </div>
                                 <div class="video-meta">${sizeInMB} MB • ${modDate}</div>
                             </div>
-                            <button class="btn" onclick="switchVideo('${video.filename}', 'local', null, this)" 
-                                    ${isActive ? 'disabled' : ''}>
-                                ${isActive ? '配信中' : '選択'}
-                            </button>
+                            ${buttonHtml}
                         `;
+                        
+                        // イベントリスナーを追加
+                        if (!isActive) {
+                            const button = videoItem.querySelector('button');
+                            button.addEventListener('click', function() {
+                                switchVideo(video.filename, 'local', null, this);
+                            });
+                        }
                         
                         videoList.appendChild(videoItem);
                     });
@@ -514,19 +660,46 @@
 
         // 動画切り替え（UDP配信開始）
         async function switchVideo(videoFile, source = 'local', googledriveFileId = null, buttonElement = null) {
+            // 切り替え中フラグを設定
+            isSwitchingVideo = true;
+            console.log('Set isSwitchingVideo to true');
+            
+            // 即座に手動で状態を更新（サーバー応答を待たない）
+            const streamStatusIndicator = document.getElementById('streamStatus');
+            const streamStatusText = document.getElementById('streamStatusText');
+            streamStatusIndicator.className = 'status-indicator switching';
+            streamStatusText.textContent = '切り替え中...';
+            
             // すぐにボタンの状態を変更
             const allButtons = document.querySelectorAll('.video-item button');
-            const clickedButton = buttonElement || event.target;
+            const clickedButton = buttonElement || null;
             
-            // クリックされたボタンを読み込み中に変更
-            const originalText = clickedButton.textContent;
-            clickedButton.textContent = '読み込み中...';
-            clickedButton.disabled = true;
+            if (!clickedButton) {
+                console.error('Button element not found');
+                isSwitchingVideo = false; // エラー時はフラグをリセット
+                return;
+            }
             
-            // 他のすべてのボタンを無効化
+            // デバッグログ
+            console.log('switchVideo called:', { videoFile, source, googledriveFileId, clickedButton });
+            console.log('Found buttons:', allButtons.length);
+            
+            // 全てのボタンを即座に無効化
             allButtons.forEach(btn => {
-                if (btn !== clickedButton) {
-                    btn.disabled = true;
+                btn.disabled = true;
+                if (btn === clickedButton) {
+                    // クリックされたボタンの表示を変更
+                    btn.setAttribute('data-original-text', btn.textContent);
+                    if (source === 'googledrive') {
+                        btn.textContent = 'ダウンロード中...';
+                        console.log('Set button to ダウンロード中...');
+                    } else {
+                        btn.textContent = '切り替え中...';
+                    }
+                } else if (!btn.hasAttribute('data-original-text')) {
+                    // 他のボタンは待機中に
+                    btn.setAttribute('data-original-text', btn.textContent);
+                    btn.textContent = '待機中...';
                 }
             });
             
@@ -553,29 +726,43 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    refreshAll();
-                    // Google Driveファイルリストも更新
-                    if (source === 'googledrive' && googledriveFiles.length > 0) {
-                        displayGoogleDriveFiles(googledriveFiles);
-                        // alert(`Google Drive動画のダウンロードと配信を開始しました: ${videoFile}`);
-                    }
+                    // 成功時は状態更新のみ（ボタン再生成は避ける）
+                    // refreshAll(); // ダウンロード中はボタン再生成を避ける
+                    // displayGoogleDriveFiles(googledriveFiles); // ダウンロード中はボタン再生成を避ける
+                    console.log('Switch video success, avoiding button regeneration during download');
                 } else {
-                    // エラー時はボタンを元に戻す
-                    clickedButton.textContent = originalText;
+                    // エラー時は全ボタンを元に戻す
+                    isSwitchingVideo = false; // フラグをリセット
                     allButtons.forEach(btn => {
+                        const originalText = btn.getAttribute('data-original-text');
+                        if (originalText) {
+                            btn.textContent = originalText;
+                            btn.removeAttribute('data-original-text');
+                        }
                         btn.disabled = false;
                     });
+                    streamStatusIndicator.className = 'status-indicator stopped';
+                    streamStatusText.textContent = '停止中';
                     alert('UDP配信開始エラー: ' + data.error);
+                    refreshAll();
                 }
                 
             } catch (error) {
                 console.error('Switch video error:', error);
-                // エラー時はボタンを元に戻す
-                clickedButton.textContent = originalText;
+                // エラー時は全ボタンを元に戻す
+                isSwitchingVideo = false; // フラグをリセット
                 allButtons.forEach(btn => {
+                    const originalText = btn.getAttribute('data-original-text');
+                    if (originalText) {
+                        btn.textContent = originalText;
+                        btn.removeAttribute('data-original-text');
+                    }
                     btn.disabled = false;
                 });
+                streamStatusIndicator.className = 'status-indicator stopped';
+                streamStatusText.textContent = '停止中';
                 alert('UDP配信開始エラー: ' + error.message);
+                refreshAll();
             }
         }
 
@@ -757,6 +944,10 @@
                     const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
                     const modDate = new Date(file.modified).toLocaleString();
                     
+                    const buttonHtml = isActive ? 
+                        '<button class="btn" disabled>配信中</button>' :
+                        `<button class="btn" data-filename="${file.filename}" data-fileid="${file.id}">選択</button>`;
+                    
                     videoItem.innerHTML = `
                         <div class="video-info">
                             <div class="video-name">
@@ -765,11 +956,16 @@
                             </div>
                             <div class="video-meta">${sizeInMB} MB • ${modDate}</div>
                         </div>
-                        <button class="btn" onclick="switchVideo('${file.filename}', 'googledrive', '${file.id}', this)" 
-                                ${isActive ? 'disabled' : ''}>
-                            ${isActive ? '配信中' : '選択'}
-                        </button>
+                        ${buttonHtml}
                     `;
+                    
+                    // イベントリスナーを追加
+                    if (!isActive) {
+                        const button = videoItem.querySelector('button');
+                        button.addEventListener('click', function() {
+                            switchVideo(file.filename, 'googledrive', file.id, this);
+                        });
+                    }
                     
                     videoList.appendChild(videoItem);
                 });

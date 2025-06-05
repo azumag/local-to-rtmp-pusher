@@ -77,8 +77,35 @@ app.get('/api/status', async (req, res) => {
 
         const processStatus = processManager.getStatus();
         
+        // ProcessManagerの状態に基づいて適切なstream_statusを決定
+        let actualStreamStatus = streamStatus;
+        
+        if (streamStatus === 'downloading') {
+            // downloading中はProcessManagerの状態を確認してstreaming開始を検出
+            if (processStatus.udp_streaming_running) {
+                actualStreamStatus = 'streaming';
+                streamStatus = 'streaming'; // downloadingからstreamingへ遷移
+            } else if (processStatus.is_switching) {
+                actualStreamStatus = 'switching';
+                streamStatus = 'switching'; // downloadingからswitchingへ遷移
+            }
+            // それ以外はdownloading状態を維持
+        } else {
+            // downloading以外の通常の状態管理
+            if (processStatus.is_switching) {
+                actualStreamStatus = 'switching';
+            } else if (processStatus.udp_streaming_running) {
+                actualStreamStatus = 'streaming';
+            } else {
+                actualStreamStatus = 'stopped';
+            }
+            
+            // グローバル状態をProcessManagerの実際の状態と同期
+            streamStatus = actualStreamStatus;
+        }
+        
         res.json({
-            stream_status: streamStatus,
+            stream_status: actualStreamStatus,
             current_video: currentVideo,
             current_video_source: currentVideoSource,
             process_status: processStatus,
@@ -143,11 +170,16 @@ app.post('/api/switch', async (req, res) => {
             });
         }
 
+        // 切り替え中状態に設定
+        streamStatus = 'switching';
+        log.info(`動画切り替え開始: ${currentVideo} → ${video} (source: ${source})`);
+
         let result;
 
         if (source === 'googledrive') {
             // Google Driveファイルの処理
             if (!googleDriveManager || !googleDriveManager.isAuthenticated()) {
+                streamStatus = 'stopped'; // エラー時は状態をリセット
                 return res.status(500).json({ 
                     success: false, 
                     error: 'Google Drive not available or not authenticated' 
@@ -155,6 +187,7 @@ app.post('/api/switch', async (req, res) => {
             }
 
             if (!googledriveFileId) {
+                streamStatus = 'stopped'; // エラー時は状態をリセット
                 return res.status(400).json({ 
                     success: false, 
                     error: 'googledriveFileId parameter required for Google Drive videos' 
@@ -162,12 +195,14 @@ app.post('/api/switch', async (req, res) => {
             }
 
             log.info(`Google Drive動画ダウンロード開始: ${video} (ID: ${googledriveFileId})`);
+            streamStatus = 'downloading'; // ダウンロード中状態を明示
 
             try {
                 // Google Driveからファイルをダウンロード
                 const tempFilePath = await googleDriveManager.downloadFile(googledriveFileId, video);
                 
                 log.info(`Google Drive動画ダウンロード完了、ストリーミング開始: ${video}`);
+                // streamStatus = 'switching'; // この行を削除 - ProcessManagerが状態管理する
                 
                 // 一時ファイルからUDPストリーミング開始
                 result = await processManager.startUdpStreamingFromPath(tempFilePath, video, tempFilePath);
@@ -180,6 +215,7 @@ app.post('/api/switch', async (req, res) => {
                 
             } catch (downloadError) {
                 log.error(`Google Drive動画ダウンロードエラー: ${downloadError.message}`);
+                streamStatus = 'stopped'; // エラー時は停止状態に戻す
                 return res.status(500).json({
                     success: false,
                     error: `Google Drive download failed: ${downloadError.message}`
@@ -191,6 +227,7 @@ app.post('/api/switch', async (req, res) => {
             // ファイル存在確認
             const videoPath = path.join(__dirname, 'videos', video);
             if (!(await fs.pathExists(videoPath))) {
+                streamStatus = 'stopped'; // エラー時は状態をリセット
                 return res.status(404).json({ 
                     success: false, 
                     error: `Video file not found: ${video}` 
@@ -199,6 +236,7 @@ app.post('/api/switch', async (req, res) => {
 
             // パス検証（セキュリティ）
             if (video.includes('..') || video.startsWith('/')) {
+                streamStatus = 'stopped'; // エラー時は状態をリセット
                 return res.status(400).json({ 
                     success: false, 
                     error: 'Invalid file path' 
@@ -228,6 +266,7 @@ app.post('/api/switch', async (req, res) => {
             });
         } else {
             log.error(`動画切り替え失敗: ${result.error}`);
+            streamStatus = 'stopped'; // 失敗時は停止状態に戻す
             res.status(500).json({
                 success: false,
                 error: result.error
@@ -235,6 +274,7 @@ app.post('/api/switch', async (req, res) => {
         }
     } catch (error) {
         log.error(`Switch API error: ${error.message}`);
+        streamStatus = 'stopped'; // エラー時は停止状態に戻す
         res.status(500).json({ 
             success: false, 
             error: error.message 
