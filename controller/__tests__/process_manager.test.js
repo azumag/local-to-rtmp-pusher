@@ -33,10 +33,11 @@ describe('ProcessManager', () => {
             expect(result.success).toBe(true);
             expect(result.message).toBe('RTMP stream started');
             expect(spawn).toHaveBeenCalledWith('ffmpeg', [
-                '-i', 'udp://127.0.0.1:1234?timeout=0',
+                '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
+                '-i', 'udp://127.0.0.1:1234?timeout=0&buffer_size=65536',
                 '-c', 'copy',
                 '-f', 'flv',
-                'rtmp://localhost:1936/live/stream'
+                'rtmp://rtmp-server:1935/live/stream'
             ]);
         });
 
@@ -102,10 +103,13 @@ describe('ProcessManager', () => {
             expect(result.message).toBe('UDP streaming started: test.mp4');
             expect(spawn).toHaveBeenCalledWith('ffmpeg', [
                 '-re',
+                '-stream_loop', '-1',
                 '-i', expect.stringContaining('test.mp4'),
+                '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
                 '-c', 'copy',
                 '-f', 'mpegts',
-                'udp://127.0.0.1:1234'
+                '-buffer_size', '65536',
+                'udp://receiver:1234'
             ]);
         });
 

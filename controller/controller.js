@@ -74,7 +74,7 @@ app.get('/api/status', async (req, res) => {
 // 利用可能動画一覧
 app.get('/api/videos', async (req, res) => {
     try {
-        const videosDir = path.join(__dirname, '../videos');
+        const videosDir = path.join(__dirname, 'videos');
         const videos = [];
         
         if (await fs.pathExists(videosDir)) {
@@ -123,7 +123,7 @@ app.post('/api/switch', async (req, res) => {
         }
 
         // ファイル存在確認
-        const videoPath = path.join(__dirname, '../videos', video);
+        const videoPath = path.join(__dirname, 'videos', video);
         if (!(await fs.pathExists(videoPath))) {
             return res.status(404).json({ 
                 success: false, 
