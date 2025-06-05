@@ -6,6 +6,14 @@ jest.mock('child_process', () => ({
     spawn: jest.fn()
 }));
 
+// Mock fs-extra
+jest.mock('fs-extra', () => ({
+    pathExists: jest.fn().mockResolvedValue(true),
+    ensureDir: jest.fn().mockResolvedValue(),
+    writeFile: jest.fn().mockResolvedValue(),
+    remove: jest.fn().mockResolvedValue()
+}));
+
 // Enable fake timers
 beforeEach(() => {
     jest.useFakeTimers();
@@ -60,10 +68,14 @@ describe('ProcessManager', () => {
             expect(result.message).toBe('UDP streaming started: test.mp4');
             expect(spawn).toHaveBeenCalledWith('ffmpeg', [
                 '-re',
-                '-stream_loop', '-1',
                 '-i', expect.stringContaining('test.mp4'),
                 '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
-                '-c', 'copy',
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-ar', '48000',
+                '-ac', '2',
+                '-b:a', '192k',
+                '-af', 'volume=1.3,compand=0.3|0.3:1|1:-90/-60|-60/-40|-40/-30|-20/-20:6:0:-90:0.2',
                 '-f', 'mpegts',
                 '-buffer_size', '6291456',
                 'udp://receiver:1234'
@@ -163,12 +175,16 @@ describe('ProcessManager', () => {
 
     describe('process events', () => {
         it('should handle process close event', async () => {
+            // Mock startStandbyLoop to prevent it from being called
+            processManager.startStandbyLoop = jest.fn();
+            
             await processManager.startUdpStreaming('test.mp4');
 
             // Simulate process close
             mockProcess._trigger('close', 0);
 
             expect(processManager.udpSenderProcess).toBe(null);
+            expect(processManager.startStandbyLoop).toHaveBeenCalled();
         });
 
         it('should handle process error event', async () => {
@@ -178,6 +194,60 @@ describe('ProcessManager', () => {
             mockProcess._trigger('error', new Error('Process error'));
 
             expect(processManager.udpSenderProcess).toBe(null);
+        });
+    });
+
+    describe('switching state management', () => {
+        it('should reject new requests when switching is in progress', async () => {
+            // Set the switching flag manually to simulate an ongoing operation
+            processManager.isSwitching = true;
+            
+            // Try to start streaming while switching is in progress
+            const result = await processManager.startUdpStreaming('test.mp4');
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Process is currently switching. Please wait.');
+            
+            // Reset the flag
+            processManager.isSwitching = false;
+        });
+
+        it('should manage is_switching flag lifecycle correctly', async () => {
+            // Initially not switching
+            let status = processManager.getStatus();
+            expect(status.is_switching).toBe(false);
+            
+            // Test that switching resets to false after successful start
+            await processManager.startUdpStreaming('test.mp4');
+            
+            status = processManager.getStatus();
+            expect(status.is_switching).toBe(false);
+            expect(status.udp_streaming_running).toBe(true);
+        });
+
+        it('should reset switching state on error', async () => {
+            // Mock spawn to throw an error
+            spawn.mockImplementation(() => {
+                throw new Error('Spawn failed');
+            });
+            
+            const result = await processManager.startUdpStreaming('test.mp4');
+            
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Spawn failed');
+            
+            // Switching state should be reset
+            const status = processManager.getStatus();
+            expect(status.is_switching).toBe(false);
+        });
+
+        it('should include is_switching in getStatus response', async () => {
+            const status = processManager.getStatus();
+            
+            expect(status).toHaveProperty('is_switching');
+            expect(status).toHaveProperty('udp_streaming_running');
+            expect(status).toHaveProperty('udp_sender_pid');
+            expect(typeof status.is_switching).toBe('boolean');
         });
     });
 });
