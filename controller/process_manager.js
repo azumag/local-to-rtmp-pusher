@@ -5,6 +5,7 @@ class ProcessManager {
     constructor() {
         this.udpSenderProcess = null;  // 動画→UDP送信プロセス
         this.currentTempFile = null;   // 現在使用中の一時ファイル
+        this.isSwitching = false;      // プロセス切り替え中フラグ
         this.log = {
             info: (msg) => console.log(`[${new Date().toISOString()}] [ProcessManager] [INFO] ${msg}`),
             error: (msg) => console.error(`[${new Date().toISOString()}] [ProcessManager] [ERROR] ${msg}`),
@@ -16,6 +17,14 @@ class ProcessManager {
     // UDPストリーミング開始 (動画→UDP送信)
     async startUdpStreaming(videoFile) {
         try {
+            // 切り替え中チェック
+            if (this.isSwitching) {
+                return { success: false, error: 'Process is currently switching. Please wait.' };
+            }
+
+            this.isSwitching = true;
+            this.log.info(`UDPストリーミング切り替え開始: ${videoFile}`);
+            
             if (this.udpSenderProcess) {
                 // 既存のプロセスを停止
                 await this.stopUdpStreaming();
@@ -59,9 +68,11 @@ class ProcessManager {
                 this.udpSenderProcess = null;
             });
 
+            this.isSwitching = false;
             return { success: true, message: `UDP streaming started: ${videoFile}` };
 
         } catch (error) {
+            this.isSwitching = false;
             this.log.error(`UDPストリーミング開始エラー: ${error.message}`);
             return { success: false, error: error.message };
         }
@@ -70,12 +81,20 @@ class ProcessManager {
     // UDPストリーミング開始（フルパス指定版）
     async startUdpStreamingFromPath(videoPath, displayName = null, tempFile = null) {
         try {
+            // 切り替え中チェック
+            if (this.isSwitching) {
+                return { success: false, error: 'Process is currently switching. Please wait.' };
+            }
+
+            this.isSwitching = true;
+            const videoName = displayName || path.basename(videoPath);
+            this.log.info(`UDPストリーミング切り替え開始（フルパス）: ${videoName}`);
+            
             if (this.udpSenderProcess) {
                 // 既存のプロセスを停止
                 await this.stopUdpStreaming();
             }
 
-            const videoName = displayName || path.basename(videoPath);
             this.log.info(`UDPストリーミング開始（フルパス）: ${videoName}`);
             
             // 一時ファイル情報を保存
@@ -88,7 +107,7 @@ class ProcessManager {
                 '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
                 '-c', 'copy',
                 '-f', 'mpegts',
-                '-buffer_size', '65536',
+                '-buffer_size', '6291456',
                 'udp://receiver:1234'
             ];
 
@@ -124,9 +143,11 @@ class ProcessManager {
                 }
             });
 
+            this.isSwitching = false;
             return { success: true, message: `UDP streaming started: ${videoName}` };
 
         } catch (error) {
+            this.isSwitching = false;
             this.log.error(`UDPストリーミング開始エラー: ${error.message}`);
             
             // エラー時も一時ファイルをクリーンアップ
@@ -206,7 +227,8 @@ class ProcessManager {
     getStatus() {
         return {
             udp_streaming_running: !!this.udpSenderProcess,
-            udp_sender_pid: this.udpSenderProcess ? this.udpSenderProcess.pid : null
+            udp_sender_pid: this.udpSenderProcess ? this.udpSenderProcess.pid : null,
+            is_switching: this.isSwitching
         };
     }
 
