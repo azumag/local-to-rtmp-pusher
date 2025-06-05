@@ -135,7 +135,10 @@ app.post('/api/switch', async (req, res) => {
             });
         }
 
-        const { video, source = 'local', googledriveFileId } = req.body;
+        const { video, source = 'local', googledriveFileId, mode } = req.body;
+        
+        // ストリーミングモード決定 (デフォルト: rtmp)
+        const streamingMode = mode || process.env.STREAMING_MODE || 'rtmp';
         if (!video) {
             return res.status(400).json({ 
                 success: false, 
@@ -167,10 +170,14 @@ app.post('/api/switch', async (req, res) => {
                 // Google Driveからファイルをダウンロード
                 const tempFilePath = await googleDriveManager.downloadFile(googledriveFileId, video);
                 
-                log.info(`Google Drive動画ダウンロード完了、ストリーミング開始: ${video}`);
+                log.info(`Google Drive動画ダウンロード完了、ストリーミング開始: ${video} (mode: ${streamingMode})`);
                 
-                // 一時ファイルからUDPストリーミング開始
-                result = await processManager.startUdpStreamingFromPath(tempFilePath, video, tempFilePath);
+                // 一時ファイルからストリーミング開始（モード切り替え対応）
+                if (streamingMode === 'rtmp') {
+                    result = await processManager.startRtmpStreamingFromPath(tempFilePath, video, tempFilePath);
+                } else {
+                    result = await processManager.startUdpStreamingFromPath(tempFilePath, video, tempFilePath);
+                }
                 
                 if (result.success) {
                     currentVideo = video;
@@ -205,10 +212,14 @@ app.post('/api/switch', async (req, res) => {
                 });
             }
 
-            log.info(`ローカル動画切り替え開始: ${currentVideo} → ${video}`);
+            log.info(`ローカル動画切り替え開始: ${currentVideo} → ${video} (mode: ${streamingMode})`);
 
-            // UDPストリーミング開始
-            result = await processManager.startUdpStreaming(video);
+            // ストリーミング開始（モード切り替え対応）
+            if (streamingMode === 'rtmp') {
+                result = await processManager.startRtmpStreaming(video);
+            } else {
+                result = await processManager.startUdpStreaming(video);
+            }
 
             if (result.success) {
                 currentVideo = video;
