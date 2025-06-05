@@ -18,16 +18,18 @@ app.use(express.static(path.join(__dirname, 'templates')));
 
 // グローバル状態
 let currentVideo = null;
-let streamStatus = "stopped";
-let rtmpStreamStatus = "stopped";
+let streamStatus = 'stopped';
+let rtmpStreamStatus = 'stopped';
+let relayStatus = 'stopped';
+let currentRelayUrl = null;
 let processManager = null;
 
 // ProcessManager初期化
 async function initializeProcessManager() {
     try {
-        log.info("ProcessManager初期化開始...");
+        log.info('ProcessManager初期化開始...');
         processManager = new ProcessManager();
-        log.info("ProcessManager初期化成功");
+        log.info('ProcessManager初期化成功');
         return true;
     } catch (error) {
         log.error(`ProcessManager初期化失敗: ${error.message}`);
@@ -45,10 +47,10 @@ app.get('/api/status', async (req, res) => {
     try {
         if (!processManager) {
             return res.json({
-                stream_status: "error",
-                rtmp_stream_status: "error",
+                stream_status: 'error',
+                rtmp_stream_status: 'error',
                 current_video: null,
-                error: "ProcessManager not initialized"
+                error: 'ProcessManager not initialized'
             });
         }
 
@@ -57,7 +59,9 @@ app.get('/api/status', async (req, res) => {
         res.json({
             stream_status: streamStatus,
             rtmp_stream_status: rtmpStreamStatus,
+            relay_status: relayStatus,
             current_video: currentVideo,
+            current_relay_url: currentRelayUrl,
             process_status: processStatus,
             timestamp: new Date().toISOString()
         });
@@ -70,7 +74,7 @@ app.get('/api/status', async (req, res) => {
 // 利用可能動画一覧
 app.get('/api/videos', async (req, res) => {
     try {
-        const videosDir = path.join(__dirname, '../videos');
+        const videosDir = path.join(__dirname, 'videos');
         const videos = [];
         
         if (await fs.pathExists(videosDir)) {
@@ -106,7 +110,7 @@ app.post('/api/switch', async (req, res) => {
         if (!processManager) {
             return res.status(500).json({ 
                 success: false, 
-                error: "ProcessManager not initialized" 
+                error: 'ProcessManager not initialized' 
             });
         }
 
@@ -114,12 +118,12 @@ app.post('/api/switch', async (req, res) => {
         if (!video) {
             return res.status(400).json({ 
                 success: false, 
-                error: "video parameter required" 
+                error: 'video parameter required' 
             });
         }
 
         // ファイル存在確認
-        const videoPath = path.join(__dirname, '../videos', video);
+        const videoPath = path.join(__dirname, 'videos', video);
         if (!(await fs.pathExists(videoPath))) {
             return res.status(404).json({ 
                 success: false, 
@@ -131,7 +135,7 @@ app.post('/api/switch', async (req, res) => {
         if (video.includes('..') || video.startsWith('/')) {
             return res.status(400).json({ 
                 success: false, 
-                error: "Invalid file path" 
+                error: 'Invalid file path' 
             });
         }
 
@@ -142,7 +146,7 @@ app.post('/api/switch', async (req, res) => {
 
         if (result.success) {
             currentVideo = video;
-            streamStatus = "streaming";
+            streamStatus = 'streaming';
             log.info(`動画切り替え完了: ${video}`);
             
             res.json({
@@ -172,7 +176,7 @@ app.post('/api/stop', async (req, res) => {
         if (!processManager) {
             return res.status(500).json({ 
                 success: false, 
-                error: "ProcessManager not initialized" 
+                error: 'ProcessManager not initialized' 
             });
         }
 
@@ -180,12 +184,12 @@ app.post('/api/stop', async (req, res) => {
 
         if (result.success) {
             currentVideo = null;
-            streamStatus = "stopped";
-            log.info("配信停止完了");
+            streamStatus = 'stopped';
+            log.info('配信停止完了');
             
             res.json({
                 success: true,
-                message: "Stream stopped successfully"
+                message: 'Stream stopped successfully'
             });
         } else {
             log.error(`配信停止失敗: ${result.error}`);
@@ -209,19 +213,19 @@ app.post('/api/rtmp/start', async (req, res) => {
         if (!processManager) {
             return res.status(500).json({ 
                 success: false, 
-                error: "ProcessManager not initialized" 
+                error: 'ProcessManager not initialized' 
             });
         }
 
         const result = await processManager.startRtmpStream();
 
         if (result.success) {
-            rtmpStreamStatus = "streaming";
-            log.info("RTMPストリーム開始完了");
+            rtmpStreamStatus = 'streaming';
+            log.info('RTMPストリーム開始完了');
             
             res.json({
                 success: true,
-                message: "RTMP stream started successfully"
+                message: 'RTMP stream started successfully'
             });
         } else {
             log.error(`RTMPストリーム開始失敗: ${result.error}`);
@@ -245,19 +249,19 @@ app.post('/api/rtmp/stop', async (req, res) => {
         if (!processManager) {
             return res.status(500).json({ 
                 success: false, 
-                error: "ProcessManager not initialized" 
+                error: 'ProcessManager not initialized' 
             });
         }
 
         const result = await processManager.stopRtmpStream();
 
         if (result.success) {
-            rtmpStreamStatus = "stopped";
-            log.info("RTMPストリーム停止完了");
+            rtmpStreamStatus = 'stopped';
+            log.info('RTMPストリーム停止完了');
             
             res.json({
                 success: true,
-                message: "RTMP stream stopped successfully"
+                message: 'RTMP stream stopped successfully'
             });
         } else {
             log.error(`RTMPストリーム停止失敗: ${result.error}`);
@@ -275,28 +279,128 @@ app.post('/api/rtmp/stop', async (req, res) => {
     }
 });
 
+// RTMPリレー開始
+app.post('/api/relay/start', async (req, res) => {
+    try {
+        if (!processManager) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'ProcessManager not initialized' 
+            });
+        }
+
+        const { relayUrl, encodingSettings } = req.body;
+        if (!relayUrl) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'relayUrl parameter required' 
+            });
+        }
+
+        // URLバリデーション
+        try {
+            const url = new URL(relayUrl);
+            if (url.protocol !== 'rtmp:') {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Invalid RTMP URL' 
+                });
+            }
+        } catch (e) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid URL format' 
+            });
+        }
+
+        const result = await processManager.startRelay(relayUrl, encodingSettings);
+
+        if (result.success) {
+            relayStatus = 'streaming';
+            currentRelayUrl = relayUrl;
+            log.info(`RTMPリレー開始完了: ${relayUrl}`);
+            
+            res.json({
+                success: true,
+                message: result.message,
+                settings: result.settings
+            });
+        } else {
+            log.error(`RTMPリレー開始失敗: ${result.error}`);
+            res.status(500).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        log.error(`Relay start API error: ${error.message}`);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// RTMPリレー停止
+app.post('/api/relay/stop', async (req, res) => {
+    try {
+        if (!processManager) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'ProcessManager not initialized' 
+            });
+        }
+
+        const result = await processManager.stopRelay();
+
+        if (result.success) {
+            relayStatus = 'stopped';
+            currentRelayUrl = null;
+            log.info('RTMPリレー停止完了');
+            
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } else {
+            log.error(`RTMPリレー停止失敗: ${result.error}`);
+            res.status(500).json({
+                success: false,
+                error: result.error
+            });
+        }
+    } catch (error) {
+        log.error(`Relay stop API error: ${error.message}`);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 // ヘルスチェック
 app.get('/api/health', async (req, res) => {
     try {
         if (!processManager) {
             return res.json({
-                status: "error",
-                error: "ProcessManager not initialized"
+                status: 'error',
+                error: 'ProcessManager not initialized'
             });
         }
 
         const processStatus = processManager.getStatus();
 
         res.json({
-            status: "healthy",
+            status: 'healthy',
             rtmp_process: processStatus.rtmp_stream_running,
             udp_process: processStatus.udp_streaming_running,
+            relay_process: processStatus.relay_running,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
         log.error(`Health API error: ${error.message}`);
         res.status(500).json({
-            status: "error",
+            status: 'error',
             error: error.message
         });
     }
@@ -309,7 +413,7 @@ app.get('/api/logs', async (req, res) => {
         const lines = parseInt(req.query.lines) || 100;
 
         // シンプルなログ実装 - 実際にはファイルから読み込むかメモリに保存
-        const logs = [`[${new Date().toISOString()}] Log type: ${logType}`, "System is running..."];
+        const logs = [`[${new Date().toISOString()}] Log type: ${logType}`, 'System is running...'];
 
         res.json({
             logs: logs,
@@ -324,45 +428,45 @@ app.get('/api/logs', async (req, res) => {
 
 // エラーハンドラー
 app.use((req, res) => {
-    res.status(404).json({ error: "Endpoint not found" });
+    res.status(404).json({ error: 'Endpoint not found' });
 });
 
-app.use((error, req, res, next) => {
+app.use((error, req, res, _next) => {
     log.error(`Express error: ${error.message}`);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: 'Internal server error' });
 });
 
 // サーバー起動
 async function startServer() {
-    log.info("UDP配信システム制御コントローラー起動中...");
+    log.info('UDP配信システム制御コントローラー起動中...');
     
     // ProcessManager初期化
     const processInitialized = await initializeProcessManager();
     if (!processInitialized) {
-        log.warning("ProcessManagerの初期化に失敗しましたが、サーバーを起動します");
+        log.warning('ProcessManagerの初期化に失敗しましたが、サーバーを起動します');
     }
 
-    log.info("システム初期化完了");
+    log.info('システム初期化完了');
 
     const port = process.env.PORT || 8080;
     app.listen(port, '0.0.0.0', () => {
         log.info(`サーバーが起動しました: http://0.0.0.0:${port}`);
-        log.info("Web UI: http://localhost:8080");
-        log.info("pocスタイルのコントロール:");
-        log.info("1. RTMPストリーム開始: POST /api/rtmp/start");
-        log.info("2. 動画選択・UDP送信: POST /api/switch");
-        log.info("3. ストリーム停止: POST /api/stop, POST /api/rtmp/stop");
+        log.info('Web UI: http://localhost:8080');
+        log.info('pocスタイルのコントロール:');
+        log.info('1. RTMPストリーム開始: POST /api/rtmp/start');
+        log.info('2. 動画選択・UDP送信: POST /api/switch');
+        log.info('3. ストリーム停止: POST /api/stop, POST /api/rtmp/stop');
     });
 }
 
 // グレースフルシャットダウン
 process.on('SIGTERM', () => {
-    log.info("SIGTERM received, shutting down gracefully");
+    log.info('SIGTERM received, shutting down gracefully');
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    log.info("SIGINT received, shutting down gracefully");
+    log.info('SIGINT received, shutting down gracefully');
     process.exit(0);
 });
 

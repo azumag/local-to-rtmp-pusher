@@ -1,0 +1,10 @@
+FROM alpine:latest
+
+RUN apk add --no-cache ffmpeg bash
+
+WORKDIR /app
+
+COPY scripts/relay-entrypoint.sh /app/relay-entrypoint.sh
+RUN chmod +x /app/relay-entrypoint.sh
+
+ENTRYPOINT ["/app/relay-entrypoint.sh"]

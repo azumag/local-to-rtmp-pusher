@@ -1,0 +1,24 @@
+{
+  "name": "streamcaster",
+  "version": "1.0.0",
+  "description": "UDP to RTMP streaming system",
+  "private": true,
+  "workspaces": [
+    "controller"
+  ],
+  "scripts": {
+    "prepare": "husky install",
+    "controller:start": "cd controller && npm start",
+    "controller:test": "cd controller && npm test",
+    "controller:lint": "cd controller && npm run lint",
+    "controller:ci": "cd controller && npm run ci"
+  },
+  "devDependencies": {
+    "husky": "^8.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

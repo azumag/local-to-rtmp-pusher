@@ -1,6 +1,4 @@
 const Docker = require('dockerode');
-const { spawn } = require('child_process');
-const fs = require('fs-extra');
 const path = require('path');
 
 class DockerManager {
@@ -116,7 +114,7 @@ class DockerManager {
                         container_id: container.id,
                         container_name: containerName,
                         video_file: videoFile,
-                        note: "Container exited quickly (short video or completed)"
+                        note: 'Container exited quickly (short video or completed)'
                     };
                 } else {
                     this.log.error(`Senderコンテナ起動失敗: ${containerInfo.State.Status}`);
@@ -133,7 +131,7 @@ class DockerManager {
                     container_id: container.id,
                     container_name: containerName,
                     video_file: videoFile,
-                    note: "Container completed and was auto-removed"
+                    note: 'Container completed and was auto-removed'
                 };
             }
 
@@ -154,7 +152,7 @@ class DockerManager {
             if (this.currentSenderContainer) {
                 try {
                     await this.currentSenderContainer.stop({ t: 10 });
-                    this.log.info("現在のSenderコンテナを停止しました");
+                    this.log.info('現在のSenderコンテナを停止しました');
                     stoppedCount++;
                 } catch (error) {
                     this.log.warning(`現在のSenderコンテナ停止エラー: ${error.message}`);
@@ -270,7 +268,7 @@ class DockerManager {
 
     async checkReceiverHealth() {
         try {
-            const container = this.docker.getContainer("streaming-receiver");
+            const container = this.docker.getContainer('streaming-receiver');
             const info = await container.inspect();
             return info.State.Running;
         } catch (error) {
@@ -315,7 +313,7 @@ class DockerManager {
             });
 
             if (containers.length === 0) {
-                return ["No sender containers running"];
+                return ['No sender containers running'];
             }
 
             // 最新のコンテナのログを取得
@@ -330,7 +328,7 @@ class DockerManager {
 
     async getControllerLogs(lines = 100) {
         try {
-            return await this.getContainerLogs("streaming-controller", lines);
+            return await this.getContainerLogs('streaming-controller', lines);
         } catch (error) {
             this.log.error(`コントローラログ取得エラー: ${error.message}`);
             return [`Error getting controller logs: ${error.message}`];
