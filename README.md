@@ -10,6 +10,7 @@
 ## ✨ Key Features
 
 - 🎥 **Dynamic Video Switching** - Change videos seamlessly during live streams
+- ☁️ **Google Drive Integration** - Stream videos directly from Google Drive folders
 - 🌐 **Web-based Control Panel** - Intuitive browser interface for stream management
 - 📡 **Multiple Platform Support** - Stream to Twitch, YouTube, Facebook Live, and custom RTMP servers
 - 🔄 **Zero-Downtime Switching** - Switch videos without dropping the RTMP connection
@@ -270,6 +271,12 @@ Create `.env` file with your configuration:
 RTMP_SERVER=rtmp://live.twitch.tv/live
 STREAM_KEY=your_stream_key_here
 
+# Google Drive Configuration
+GOOGLE_DRIVE_API_KEY=your_google_drive_api_key_here
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+GOOGLE_REFRESH_TOKEN=your_refresh_token_here
+
 # Network Settings
 UDP_PORT=1234
 HTTP_PORT=8080
@@ -280,6 +287,8 @@ CONTROLLER_CPU_LIMIT=0.5
 RECEIVER_CPU_LIMIT=1.0
 CONTROLLER_MEMORY_LIMIT=512m
 RECEIVER_MEMORY_LIMIT=1g
+MAX_DOWNLOAD_SIZE=1073741824
+TEMP_FILE_TTL=3600000
 
 # Logging
 LOG_LEVEL=info
@@ -315,6 +324,40 @@ STREAM_KEY=your-facebook-stream-key
 RTMP_SERVER=rtmp://your-server.com/live
 STREAM_KEY=your-custom-key
 ```
+
+### Google Drive Setup
+
+To enable Google Drive functionality, you need to set up Google Drive API access:
+
+#### Option 1: API Key (Public Folders Only)
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the Google Drive API
+4. Create an API key in Credentials
+5. Set the API key in your environment:
+```bash
+GOOGLE_DRIVE_API_KEY=your_api_key_here
+```
+
+#### Option 2: OAuth Credentials (Private Folders)
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the Google Drive API
+3. Create OAuth 2.0 credentials (Desktop application)
+4. Download the credentials JSON file
+5. Use a tool like Google's OAuth Playground to get a refresh token
+6. Configure all OAuth settings:
+```bash
+GOOGLE_CLIENT_ID=your_client_id_here
+GOOGLE_CLIENT_SECRET=your_client_secret_here
+GOOGLE_REFRESH_TOKEN=your_refresh_token_here
+```
+
+#### Using Google Drive
+1. Share your Google Drive folder publicly (for API key) or ensure OAuth access
+2. Copy the folder URL or ID
+3. In the web interface, switch to the "Google Drive" tab
+4. Paste the folder link and click "ファイルリスト取得"
+5. Select videos from the list to stream
 
 ### Video Settings
 
@@ -352,10 +395,20 @@ Returns current streaming status and system information.
 #### POST /api/switch
 Start streaming or switch to a different video.
 
-**Request:**
+**Request (Local File):**
 ```json
 {
-  "video": "filename.mp4"
+  "video": "filename.mp4",
+  "source": "local"
+}
+```
+
+**Request (Google Drive):**
+```json
+{
+  "video": "filename.mp4",
+  "source": "googledrive",
+  "googledriveFileId": "file_id_from_google_drive"
 }
 ```
 
@@ -365,6 +418,7 @@ Start streaming or switch to a different video.
   "success": boolean,
   "message": "string",
   "video": "filename.mp4",
+  "source": "local|googledrive",
   "status": "streaming"
 }
 ```
@@ -396,6 +450,62 @@ List all available video files.
     }
   ],
   "count": 1
+}
+```
+
+### Google Drive Management
+
+#### POST /api/googledrive/files
+Get video files from a Google Drive folder.
+
+**Request:**
+```json
+{
+  "folderLink": "https://drive.google.com/drive/folders/folder_id"
+}
+```
+
+**Response:**
+```json
+{
+  "success": boolean,
+  "files": [
+    {
+      "id": "file_id",
+      "filename": "video.mp4",
+      "size": 52428800,
+      "modified": "2024-06-05T10:30:00.000Z"
+    }
+  ],
+  "count": 1,
+  "folderId": "folder_id"
+}
+```
+
+#### GET /api/googledrive/status
+Check Google Drive authentication status and temporary files.
+
+**Response:**
+```json
+{
+  "authenticated": boolean,
+  "tempDir": {
+    "fileCount": 3,
+    "totalSize": 157286400,
+    "totalSizeMB": "150.00"
+  },
+  "timestamp": "ISO-8601-datetime"
+}
+```
+
+#### POST /api/googledrive/cleanup
+Clean up temporary Google Drive files.
+
+**Response:**
+```json
+{
+  "success": boolean,
+  "message": "Cleanup completed"
 }
 ```
 
@@ -442,6 +552,7 @@ streamcaster/
 │   ├── templates/             # Web UI templates
 │   ├── controller.js          # Main application
 │   ├── process_manager.js     # Process management
+│   ├── google_drive_manager.js # Google Drive integration
 │   └── package.json           # Dependencies
 ├── scripts/                   # Utility scripts
 │   ├── health_check.sh        # Health monitoring
@@ -450,6 +561,7 @@ streamcaster/
 ├── rtmp-server/               # Local RTMP server
 ├── videos/                    # Video file storage
 ├── logs/                      # Application logs
+├── .env.example               # Environment configuration template
 ├── docker-compose.yml         # Docker configuration
 └── README.md                  # This file
 ```
