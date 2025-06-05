@@ -87,6 +87,12 @@ services:
       - UDP_TARGET=${UDP_HOST:-172.20.0.10}:${UDP_PORT:-1234}
       - RTMP_SERVER=${RTMP_SERVER}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GOOGLE_DRIVE_API_KEY=${GOOGLE_DRIVE_API_KEY}
+      # 動画エンコード設定
+      - VIDEO_BITRATE=${VIDEO_BITRATE:-2000k}
+      - AUDIO_BITRATE=${AUDIO_BITRATE:-128k}
+      - VIDEO_GOP_SIZE=${VIDEO_GOP_SIZE:-120}
+      - VIDEO_PRESET=${VIDEO_PRESET:-medium}
     depends_on:
       - receiver
       - relay

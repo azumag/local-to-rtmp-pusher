@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const ProcessManager = require('./process_manager');
+const GoogleDriveManager = require('./google_drive_manager');
 
 // ロガー設定
 const log = {
@@ -18,8 +19,10 @@ app.use(express.static(path.join(__dirname, 'templates')));
 
 // グローバル状態
 let currentVideo = null;
+let currentVideoSource = 'local'; // 'local' または 'googledrive'
 let streamStatus = 'stopped';
 let processManager = null;
+let googleDriveManager = null;
 
 // ProcessManager初期化
 async function initializeProcessManager() {
@@ -30,6 +33,28 @@ async function initializeProcessManager() {
         return true;
     } catch (error) {
         log.error(`ProcessManager初期化失敗: ${error.message}`);
+        return false;
+    }
+}
+
+// GoogleDriveManager初期化
+async function initializeGoogleDriveManager() {
+    try {
+        log.info('GoogleDriveManager初期化開始...');
+        googleDriveManager = new GoogleDriveManager();
+        
+        // 環境変数またはAPIキーで認証を試行
+        const apiKey = process.env.GOOGLE_DRIVE_API_KEY;
+        if (apiKey || process.env.GOOGLE_CLIENT_ID) {
+            await googleDriveManager.initializeAuth(apiKey);
+            log.info('GoogleDriveManager初期化成功');
+        } else {
+            log.warning('Google Drive認証情報が設定されていません');
+        }
+        
+        return true;
+    } catch (error) {
+        log.error(`GoogleDriveManager初期化失敗: ${error.message}`);
         return false;
     }
 }
@@ -55,7 +80,9 @@ app.get('/api/status', async (req, res) => {
         res.json({
             stream_status: streamStatus,
             current_video: currentVideo,
+            current_video_source: currentVideoSource,
             process_status: processStatus,
+            googledrive_available: googleDriveManager && googleDriveManager.isAuthenticated(),
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -81,7 +108,8 @@ app.get('/api/videos', async (req, res) => {
                     videos.push({
                         filename: file,
                         size: stats.size,
-                        modified: stats.mtime.toISOString()
+                        modified: stats.mtime.toISOString(),
+                        source: 'local'
                     });
                 }
             }
@@ -107,7 +135,7 @@ app.post('/api/switch', async (req, res) => {
             });
         }
 
-        const { video } = req.body;
+        const { video, source = 'local', googledriveFileId } = req.body;
         if (!video) {
             return res.status(400).json({ 
                 success: false, 
@@ -115,36 +143,87 @@ app.post('/api/switch', async (req, res) => {
             });
         }
 
-        // ファイル存在確認
-        const videoPath = path.join(__dirname, 'videos', video);
-        if (!(await fs.pathExists(videoPath))) {
-            return res.status(404).json({ 
-                success: false, 
-                error: `Video file not found: ${video}` 
-            });
+        let result;
+
+        if (source === 'googledrive') {
+            // Google Driveファイルの処理
+            if (!googleDriveManager || !googleDriveManager.isAuthenticated()) {
+                return res.status(500).json({ 
+                    success: false, 
+                    error: 'Google Drive not available or not authenticated' 
+                });
+            }
+
+            if (!googledriveFileId) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'googledriveFileId parameter required for Google Drive videos' 
+                });
+            }
+
+            log.info(`Google Drive動画ダウンロード開始: ${video} (ID: ${googledriveFileId})`);
+
+            try {
+                // Google Driveからファイルをダウンロード
+                const tempFilePath = await googleDriveManager.downloadFile(googledriveFileId, video);
+                
+                log.info(`Google Drive動画ダウンロード完了、ストリーミング開始: ${video}`);
+                
+                // 一時ファイルからUDPストリーミング開始
+                result = await processManager.startUdpStreamingFromPath(tempFilePath, video, tempFilePath);
+                
+                if (result.success) {
+                    currentVideo = video;
+                    currentVideoSource = 'googledrive';
+                    streamStatus = 'streaming';
+                }
+                
+            } catch (downloadError) {
+                log.error(`Google Drive動画ダウンロードエラー: ${downloadError.message}`);
+                return res.status(500).json({
+                    success: false,
+                    error: `Google Drive download failed: ${downloadError.message}`
+                });
+            }
+
+        } else {
+            // ローカルファイルの処理
+            // ファイル存在確認
+            const videoPath = path.join(__dirname, 'videos', video);
+            if (!(await fs.pathExists(videoPath))) {
+                return res.status(404).json({ 
+                    success: false, 
+                    error: `Video file not found: ${video}` 
+                });
+            }
+
+            // パス検証（セキュリティ）
+            if (video.includes('..') || video.startsWith('/')) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Invalid file path' 
+                });
+            }
+
+            log.info(`ローカル動画切り替え開始: ${currentVideo} → ${video}`);
+
+            // UDPストリーミング開始
+            result = await processManager.startUdpStreaming(video);
+
+            if (result.success) {
+                currentVideo = video;
+                currentVideoSource = 'local';
+                streamStatus = 'streaming';
+            }
         }
-
-        // パス検証（セキュリティ）
-        if (video.includes('..') || video.startsWith('/')) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Invalid file path' 
-            });
-        }
-
-        log.info(`動画切り替え開始: ${currentVideo} → ${video}`);
-
-        // UDPストリーミング開始
-        const result = await processManager.startUdpStreaming(video);
 
         if (result.success) {
-            currentVideo = video;
-            streamStatus = 'streaming';
-            log.info(`動画切り替え完了: ${video}`);
+            log.info(`動画切り替え完了: ${video} (source: ${source})`);
             
             res.json({
                 success: true,
                 video: video,
+                source: source,
                 message: `Successfully switched to ${video}`
             });
         } else {
@@ -177,6 +256,7 @@ app.post('/api/stop', async (req, res) => {
 
         if (result.success) {
             currentVideo = null;
+            currentVideoSource = 'local';
             streamStatus = 'stopped';
             log.info('配信停止完了');
             
@@ -196,6 +276,107 @@ app.post('/api/stop', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: error.message 
+        });
+    }
+});
+
+// Google Drive フォルダからファイルリスト取得
+app.post('/api/googledrive/files', async (req, res) => {
+    try {
+        if (!googleDriveManager || !googleDriveManager.isAuthenticated()) {
+            return res.status(500).json({
+                success: false,
+                error: 'Google Drive not available or not authenticated'
+            });
+        }
+
+        const { folderLink } = req.body;
+        if (!folderLink) {
+            return res.status(400).json({
+                success: false,
+                error: 'folderLink parameter required'
+            });
+        }
+
+        // フォルダIDを抽出
+        const folderId = googleDriveManager.extractFolderIdFromLink(folderLink);
+        if (!folderId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid Google Drive folder link or ID'
+            });
+        }
+
+        log.info(`Google Driveフォルダからファイルリスト取得: ${folderId}`);
+
+        // フォルダアクセステスト
+        const hasAccess = await googleDriveManager.testAccess(folderId);
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                error: 'Cannot access the specified folder. Check if the folder is public or sharing settings.'
+            });
+        }
+
+        // ファイルリスト取得
+        const files = await googleDriveManager.getVideoFiles(folderId);
+
+        res.json({
+            success: true,
+            files: files,
+            count: files.length,
+            folderId: folderId
+        });
+
+    } catch (error) {
+        log.error(`Google Drive files API error: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Google Drive認証状態確認
+app.get('/api/googledrive/status', async (req, res) => {
+    try {
+        const isAuthenticated = googleDriveManager && googleDriveManager.isAuthenticated();
+        const tempDirInfo = isAuthenticated ? await googleDriveManager.getTempDirInfo() : null;
+
+        res.json({
+            authenticated: isAuthenticated,
+            tempDir: tempDirInfo,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        log.error(`Google Drive status API error: ${error.message}`);
+        res.status(500).json({
+            error: error.message
+        });
+    }
+});
+
+// Google Drive一時ファイルクリーンアップ
+app.post('/api/googledrive/cleanup', async (req, res) => {
+    try {
+        if (!googleDriveManager) {
+            return res.status(500).json({
+                success: false,
+                error: 'Google Drive not available'
+            });
+        }
+
+        await googleDriveManager.cleanupOldFiles();
+
+        res.json({
+            success: true,
+            message: 'Cleanup completed'
+        });
+    } catch (error) {
+        log.error(`Google Drive cleanup API error: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
@@ -264,6 +445,12 @@ async function startServer() {
     const processInitialized = await initializeProcessManager();
     if (!processInitialized) {
         log.warning('ProcessManagerの初期化に失敗しましたが、サーバーを起動します');
+    }
+
+    // GoogleDriveManager初期化
+    const googleDriveInitialized = await initializeGoogleDriveManager();
+    if (!googleDriveInitialized) {
+        log.warning('GoogleDriveManagerの初期化に失敗しましたが、サーバーを起動します');
     }
 
     log.info('システム初期化完了');

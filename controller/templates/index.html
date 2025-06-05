@@ -183,6 +183,107 @@
             margin-top: 5px;
         }
         
+        .source-badge {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+            font-weight: 500;
+        }
+        
+        .source-badge.local {
+            background: #3498db;
+            color: white;
+        }
+        
+        .source-badge.googledrive {
+            background: #4285f4;
+            color: white;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-size: 16px;
+            font-weight: 500;
+            color: #7f8c8d;
+            transition: all 0.3s ease;
+        }
+        
+        .tab.active {
+            color: #2c3e50;
+            border-bottom-color: #3498db;
+        }
+        
+        .tab:hover {
+            color: #2c3e50;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .googledrive-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ecf0f1;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .googledrive-input:focus {
+            outline: none;
+            border-color: #4285f4;
+        }
+        
+        .googledrive-status {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .googledrive-status.available {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .googledrive-status.unavailable {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+        }
+        
+        .download-progress {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e8f4fd;
+            border-radius: 5px;
+            border-left: 4px solid #2196f3;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -213,6 +314,7 @@
                 </div>
                 <div class="status-item">
                     <span>現在の動画: <strong id="currentVideo">なし</strong></span>
+                    <span class="source-badge" id="currentVideoSource" style="display: none;">ローカル</span>
                 </div>
                 <div class="status-item">
                     <span id="lastUpdate">最終更新: --</span>
@@ -226,13 +328,60 @@
                 <p style="margin-bottom: 15px; color: #7f8c8d;">
                     動画ファイルを選択してUDP送信を開始
                 </p>
-                <div id="videoList" class="video-list">
-                    <div style="padding: 20px; text-align: center; color: #7f8c8d;">
-                        動画を読み込み中...
+                
+                <!-- タブメニュー -->
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('local')" id="localTabBtn">ローカルファイル</button>
+                    <button class="tab" onclick="switchTab('googledrive')" id="googledriveTabBtn">Google Drive</button>
+                </div>
+                
+                <!-- ローカルファイルタブ -->
+                <div id="localTab" class="tab-content active">
+                    <div id="videoList" class="video-list">
+                        <div style="padding: 20px; text-align: center; color: #7f8c8d;">
+                            動画を読み込み中...
+                        </div>
+                    </div>
+                    <div class="control-buttons">
+                        <button class="btn" onclick="refreshVideos()">動画リスト更新</button>
                     </div>
                 </div>
-                <div class="control-buttons">
-                    <button class="btn" onclick="refreshVideos()">動画リスト更新</button>
+                
+                <!-- Google Driveタブ -->
+                <div id="googledriveTabContent" class="tab-content">
+                    <div id="googledriveStatus" class="googledrive-status unavailable" style="display: none;">
+                        Google Drive機能は利用できません
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="googledriveLink" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                            Google DriveフォルダのリンクまたはID:
+                        </label>
+                        <input type="text" 
+                               id="googledriveLink" 
+                               class="googledrive-input"
+                               placeholder="例: https://drive.google.com/drive/folders/1a2b3c4d5e6f... または フォルダID"
+                               autocomplete="off">
+                    </div>
+                    
+                    <div class="control-buttons" style="margin-bottom: 20px;">
+                        <button class="btn" onclick="loadGoogleDriveFiles()" id="loadGoogleDriveBtn">
+                            ファイルリスト取得
+                        </button>
+                        <button class="btn warning" onclick="cleanupGoogleDriveFiles()">
+                            一時ファイル削除
+                        </button>
+                    </div>
+                    
+                    <div id="googledriveVideoList" class="video-list" style="display: none;">
+                        <div style="padding: 20px; text-align: center; color: #7f8c8d;">
+                            フォルダリンクを入力してファイルを取得してください
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 共通制御ボタン -->
+                <div class="control-buttons" style="margin-top: 20px; border-top: 1px solid #ecf0f1; padding-top: 20px;">
                     <button class="btn danger" onclick="stopStream()" id="stopBtn" disabled>UDP配信停止</button>
                 </div>
             </div>
@@ -242,11 +391,15 @@
     <script>
         // グローバル変数
         let currentVideoFile = null;
+        let currentVideoSource = 'local';
         let refreshInterval = null;
+        let googledriveFiles = [];
+        let activeTab = 'local';
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
             refreshAll();
+            checkGoogleDriveStatus();
             startAutoRefresh();
         });
 
@@ -283,10 +436,26 @@
                 
                 // 現在の動画更新
                 currentVideoFile = data.current_video;
+                currentVideoSource = data.current_video_source || 'local';
                 document.getElementById('currentVideo').textContent = currentVideoFile || 'なし';
+                
+                // 動画ソース表示
+                const sourceElement = document.getElementById('currentVideoSource');
+                if (currentVideoFile) {
+                    sourceElement.style.display = 'inline';
+                    sourceElement.textContent = currentVideoSource === 'googledrive' ? 'Google Drive' : 'ローカル';
+                    sourceElement.className = `source-badge ${currentVideoSource}`;
+                } else {
+                    sourceElement.style.display = 'none';
+                }
                 
                 // 最終更新時刻
                 document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString();
+                
+                // Google Driveファイルリストも現在の状態に合わせて更新
+                if (googledriveFiles.length > 0) {
+                    displayGoogleDriveFiles(googledriveFiles);
+                }
                 
             } catch (error) {
                 console.error('Status refresh error:', error);
@@ -315,14 +484,19 @@
                         const sizeInMB = (video.size / (1024 * 1024)).toFixed(2);
                         const modDate = new Date(video.modified).toLocaleString();
                         
+                        const isActive = video.filename === currentVideoFile && currentVideoSource === 'local';
+                        
                         videoItem.innerHTML = `
                             <div class="video-info">
-                                <div class="video-name">${video.filename}</div>
+                                <div class="video-name">
+                                    ${video.filename}
+                                    <span class="source-badge local">ローカル</span>
+                                </div>
                                 <div class="video-meta">${sizeInMB} MB • ${modDate}</div>
                             </div>
-                            <button class="btn" onclick="switchVideo('${video.filename}')" 
-                                    ${video.filename === currentVideoFile ? 'disabled' : ''}>
-                                ${video.filename === currentVideoFile ? '配信中' : '選択'}
+                            <button class="btn" onclick="switchVideo('${video.filename}', 'local', null, this)" 
+                                    ${isActive ? 'disabled' : ''}>
+                                ${isActive ? '配信中' : '選択'}
                             </button>
                         `;
                         
@@ -339,30 +513,68 @@
         }
 
         // 動画切り替え（UDP配信開始）
-        async function switchVideo(videoFile) {
+        async function switchVideo(videoFile, source = 'local', googledriveFileId = null, buttonElement = null) {
+            // すぐにボタンの状態を変更
+            const allButtons = document.querySelectorAll('.video-item button');
+            const clickedButton = buttonElement || event.target;
+            
+            // クリックされたボタンを読み込み中に変更
+            const originalText = clickedButton.textContent;
+            clickedButton.textContent = '読み込み中...';
+            clickedButton.disabled = true;
+            
+            // 他のすべてのボタンを無効化
+            allButtons.forEach(btn => {
+                if (btn !== clickedButton) {
+                    btn.disabled = true;
+                }
+            });
+            
             try {
-                // Show loading feedback (optional for warning-type messages)
-                console.log(`UDP配信開始中: ${videoFile}`);
+                console.log(`UDP配信開始中: ${videoFile} (source: ${source})`);
+                
+                const requestBody = { 
+                    video: videoFile, 
+                    source: source 
+                };
+                
+                if (source === 'googledrive' && googledriveFileId) {
+                    requestBody.googledriveFileId = googledriveFileId;
+                }
                 
                 const response = await fetch('/api/switch', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ video: videoFile })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    // alert(`UDP配信開始: ${videoFile}`);
                     refreshAll();
+                    // Google Driveファイルリストも更新
+                    if (source === 'googledrive' && googledriveFiles.length > 0) {
+                        displayGoogleDriveFiles(googledriveFiles);
+                        // alert(`Google Drive動画のダウンロードと配信を開始しました: ${videoFile}`);
+                    }
                 } else {
+                    // エラー時はボタンを元に戻す
+                    clickedButton.textContent = originalText;
+                    allButtons.forEach(btn => {
+                        btn.disabled = false;
+                    });
                     alert('UDP配信開始エラー: ' + data.error);
                 }
                 
             } catch (error) {
                 console.error('Switch video error:', error);
+                // エラー時はボタンを元に戻す
+                clickedButton.textContent = originalText;
+                allButtons.forEach(btn => {
+                    btn.disabled = false;
+                });
                 alert('UDP配信開始エラー: ' + error.message);
             }
         }
@@ -383,6 +595,10 @@
                 if (data.success) {
                     alert('UDP配信を停止しました');
                     refreshAll();
+                    // Google Driveファイルリストも更新
+                    if (googledriveFiles.length > 0) {
+                        displayGoogleDriveFiles(googledriveFiles);
+                    }
                 } else {
                     alert('UDP配信停止エラー: ' + data.error);
                 }
@@ -390,6 +606,199 @@
             } catch (error) {
                 console.error('Stop stream error:', error);
                 alert('UDP配信停止エラー: ' + error.message);
+            }
+        }
+
+        // タブ切り替え
+        function switchTab(tabName) {
+            try {
+                console.log('switchTab called with:', tabName);
+                
+                // タブボタンの状態更新
+                const localBtn = document.getElementById('localTabBtn');
+                const googleBtn = document.getElementById('googledriveTabBtn');
+                
+                if (localBtn) localBtn.classList.remove('active');
+                if (googleBtn) googleBtn.classList.remove('active');
+                
+                // IDで直接タブボタンを設定
+                if (tabName === 'local' && localBtn) {
+                    localBtn.classList.add('active');
+                } else if (tabName === 'googledrive' && googleBtn) {
+                    googleBtn.classList.add('active');
+                }
+                
+                // タブコンテンツの状態更新 - 明示的に要素を取得して操作
+                const localContent = document.getElementById('localTab');
+                const googleContent = document.getElementById('googledriveTabContent');
+                
+                console.log('Before switch - Local active:', localContent && localContent.classList.contains('active'));
+                console.log('Before switch - Google active:', googleContent && googleContent.classList.contains('active'));
+                
+                // 一旦両方のactiveクラスを削除
+                if (localContent) {
+                    localContent.classList.remove('active');
+                    localContent.style.display = 'none';
+                }
+                if (googleContent) {
+                    googleContent.classList.remove('active');
+                    googleContent.style.display = 'none';
+                }
+                
+                // 選択されたタブのコンテンツを表示
+                if (tabName === 'local' && localContent) {
+                    localContent.classList.add('active');
+                    localContent.style.display = 'block';
+                    console.log('Activated local tab');
+                } else if (tabName === 'googledrive' && googleContent) {
+                    googleContent.classList.add('active');
+                    googleContent.style.display = 'block';
+                    console.log('Activated Google Drive tab');
+                }
+                
+                console.log('After switch - Local active:', localContent && localContent.classList.contains('active'));
+                console.log('After switch - Google active:', googleContent && googleContent.classList.contains('active'));
+                
+                activeTab = tabName;
+            } catch (error) {
+                console.error('Error in switchTab:', error);
+            }
+        }
+
+        // Google Drive状態確認
+        async function checkGoogleDriveStatus() {
+            try {
+                const response = await fetch('/api/googledrive/status');
+                const data = await response.json();
+                
+                const statusElement = document.getElementById('googledriveStatus');
+                const tabElement = document.getElementById('googledriveTabBtn');
+                
+                if (data.authenticated) {
+                    statusElement.className = 'googledrive-status available';
+                    statusElement.textContent = `Google Drive利用可能 (一時ファイル: ${data.tempDir?.fileCount || 0}個, ${data.tempDir?.totalSizeMB || 0}MB)`;
+                    statusElement.style.display = 'block';
+                    tabElement.disabled = false;
+                } else {
+                    statusElement.className = 'googledrive-status unavailable';
+                    statusElement.textContent = 'Google Drive機能は利用できません（認証が必要）';
+                    statusElement.style.display = 'block';
+                    tabElement.disabled = true;
+                }
+                
+            } catch (error) {
+                console.error('Google Drive status check error:', error);
+                const statusElement = document.getElementById('googledriveStatus');
+                statusElement.className = 'googledrive-status unavailable';
+                statusElement.textContent = 'Google Drive状態確認エラー';
+                statusElement.style.display = 'block';
+            }
+        }
+
+        // Google Driveファイルリスト取得
+        async function loadGoogleDriveFiles() {
+            const folderLink = document.getElementById('googledriveLink').value.trim();
+            if (!folderLink) {
+                alert('Google DriveフォルダのリンクまたはIDを入力してください');
+                return;
+            }
+
+            const loadBtn = document.getElementById('loadGoogleDriveBtn');
+            const videoList = document.getElementById('googledriveVideoList');
+            
+            try {
+                loadBtn.disabled = true;
+                loadBtn.textContent = '読み込み中...';
+                videoList.style.display = 'block';
+                videoList.innerHTML = '<div class="loading">Google Driveからファイルリストを取得中...</div>';
+
+                const response = await fetch('/api/googledrive/files', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ folderLink: folderLink })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    googledriveFiles = data.files;
+                    displayGoogleDriveFiles(data.files);
+                } else {
+                    videoList.innerHTML = `<div style="padding: 20px; text-align: center; color: #e74c3c;">${data.error}</div>`;
+                }
+
+            } catch (error) {
+                console.error('Google Drive files load error:', error);
+                videoList.innerHTML = `<div style="padding: 20px; text-align: center; color: #e74c3c;">エラー: ${error.message}</div>`;
+            } finally {
+                loadBtn.disabled = false;
+                loadBtn.textContent = 'ファイルリスト取得';
+            }
+        }
+
+        // Google Driveファイル表示
+        function displayGoogleDriveFiles(files) {
+            const videoList = document.getElementById('googledriveVideoList');
+            
+            if (files && files.length > 0) {
+                videoList.innerHTML = '';
+                
+                files.forEach(file => {
+                    const videoItem = document.createElement('div');
+                    videoItem.className = 'video-item';
+                    
+                    const isActive = file.filename === currentVideoFile && currentVideoSource === 'googledrive';
+                    if (isActive) {
+                        videoItem.classList.add('active');
+                    }
+                    
+                    const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+                    const modDate = new Date(file.modified).toLocaleString();
+                    
+                    videoItem.innerHTML = `
+                        <div class="video-info">
+                            <div class="video-name">
+                                ${file.filename}
+                                <span class="source-badge googledrive">Google Drive</span>
+                            </div>
+                            <div class="video-meta">${sizeInMB} MB • ${modDate}</div>
+                        </div>
+                        <button class="btn" onclick="switchVideo('${file.filename}', 'googledrive', '${file.id}', this)" 
+                                ${isActive ? 'disabled' : ''}>
+                            ${isActive ? '配信中' : '選択'}
+                        </button>
+                    `;
+                    
+                    videoList.appendChild(videoItem);
+                });
+            } else {
+                videoList.innerHTML = '<div style="padding: 20px; text-align: center; color: #7f8c8d;">このフォルダには動画ファイルが見つかりませんでした</div>';
+            }
+        }
+
+        // Google Drive一時ファイルクリーンアップ
+        async function cleanupGoogleDriveFiles() {
+            if (!confirm('Google Driveの一時ファイルを削除しますか？')) return;
+
+            try {
+                const response = await fetch('/api/googledrive/cleanup', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('一時ファイルを削除しました');
+                    checkGoogleDriveStatus();
+                } else {
+                    alert('削除エラー: ' + data.error);
+                }
+
+            } catch (error) {
+                console.error('Google Drive cleanup error:', error);
+                alert('削除エラー: ' + error.message);
             }
         }
 
