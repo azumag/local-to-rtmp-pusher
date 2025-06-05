@@ -65,7 +65,7 @@ describe('ProcessManager', () => {
                 '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
                 '-c', 'copy',
                 '-f', 'mpegts',
-                '-buffer_size', '65536',
+                '-buffer_size', '6291456',
                 'udp://receiver:1234'
             ]);
         });
