@@ -1,0 +1,74 @@
+# StreamCaster Terraform Configuration Example
+# Copy this file to terraform.tfvars and customize for your environment
+
+# === GENERAL CONFIGURATION ===
+project_name = "streamcaster"
+environment  = "prod"  # or "dev", "staging"
+owner        = "azumag"
+
+# === AWS CONFIGURATION ===
+aws_region        = "ap-northeast-1"  # Tokyo region
+availability_zone = "ap-northeast-1a"
+
+# === INSTANCE CONFIGURATION ===
+# Bundle options:
+# - nano_2_0:   $5/month  (1 vCPU, 1GB RAM, 40GB SSD)  - Recommended for small deployments
+# - micro_2_0:  $10/month (1 vCPU, 2GB RAM, 60GB SSD)  - Better performance
+# - small_2_0:  $20/month (2 vCPU, 4GB RAM, 80GB SSD)  - High traffic
+instance_bundle_id    = "nano_2_0"
+instance_blueprint_id = "ubuntu_22_04"
+
+# === SECURITY CONFIGURATION ===
+# IMPORTANT: Restrict these IP ranges for production!
+admin_ip_ranges = [
+  "YOUR_ADMIN_IP/32",  # Replace with your actual IP
+  # "203.0.113.0/24",  # Example: Your office network
+]
+
+web_access_cidrs = [
+  "0.0.0.0/0"  # Allow global access to web UI (consider restricting)
+]
+
+monitoring_access_cidrs = [
+  "YOUR_MONITORING_IP/32",  # Replace with your monitoring system IP
+  # "0.0.0.0/0"  # Or allow global access for public monitoring
+]
+
+# === APPLICATION CONFIGURATION ===
+repository_url    = "https://github.com/azumag/local-to-rtmp-pusher.git"
+deployment_branch = "development"  # or "main" for stable releases
+log_level        = "info"   # debug, info, warn, error
+
+# === RTMP CONFIGURATION ===
+# These should be set via environment variables for security:
+# export TF_VAR_rtmp_server="rtmp://live.twitch.tv/live"
+# export TF_VAR_stream_key="your_stream_key_here"
+rtmp_server = "rtmp://live.twitch.tv/live"
+stream_key  = ""  # Set via environment variable!
+
+# === GOOGLE DRIVE INTEGRATION (Optional) ===
+# Set these via environment variables:
+# export TF_VAR_google_drive_api_key="your_api_key"
+# export TF_VAR_google_client_id="your_client_id"
+# export TF_VAR_google_client_secret="your_client_secret"
+# export TF_VAR_google_refresh_token="your_refresh_token"
+google_drive_api_key    = ""
+google_client_id        = ""
+google_client_secret    = ""
+google_refresh_token    = ""
+
+# === FEATURE FLAGS ===
+enable_static_ip           = true   # Recommended for production
+enable_automatic_snapshots = true   # Recommended for production
+enable_monitoring         = true    # Basic monitoring (free)
+enable_monitoring_alerts  = false   # Costs extra, disable for basic setups
+
+# === BACKUP CONFIGURATION ===
+backup_retention_days = 7  # Number of days to keep snapshots
+
+# === COST OPTIMIZATION ===
+# For cost-conscious deployments:
+# - Use nano_2_0 bundle ($5/month)
+# - Set enable_monitoring_alerts = false
+# - Consider enable_static_ip = false for dev environments
+# - Set backup_retention_days = 3 for dev environments

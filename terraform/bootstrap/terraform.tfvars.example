@@ -1,0 +1,14 @@
+# Bootstrap Configuration Example
+# Copy this file to terraform.tfvars and customize
+
+# Project configuration
+project_name = "streamcaster"
+aws_region   = "ap-northeast-1"
+
+# GitHub OIDC (optional - requires OIDC provider setup)
+create_github_oidc_role = true
+github_repository       = "azumag/streamcaster"  # Change to your repo
+
+# Note: If you want to use GitHub OIDC instead of access keys,
+# you need to set up the OIDC provider first:
+# https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
