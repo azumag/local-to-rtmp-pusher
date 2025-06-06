@@ -80,7 +80,7 @@ jobs:
         TF_VAR_environment: prod
         TF_VAR_project_name: streamcaster
         TF_VAR_owner: azumag
-        TF_VAR_instance_bundle_id: micro_2_0
+        TF_VAR_instance_bundle_id: medium_2_0
         TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
         TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
         TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
@@ -106,7 +106,7 @@ jobs:
         TF_VAR_environment: prod
         TF_VAR_project_name: streamcaster
         TF_VAR_owner: azumag
-        TF_VAR_instance_bundle_id: micro_2_0
+        TF_VAR_instance_bundle_id: medium_2_0
         TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
         TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
         TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
@@ -126,7 +126,7 @@ jobs:
         TF_VAR_environment: prod
         TF_VAR_project_name: streamcaster
         TF_VAR_owner: azumag
-        TF_VAR_instance_bundle_id: micro_2_0
+        TF_VAR_instance_bundle_id: medium_2_0
         TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
         TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
         TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
