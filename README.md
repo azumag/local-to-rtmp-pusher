@@ -372,6 +372,58 @@ Supported formats and recommended settings:
 | **Framerate** | 30fps | 24-60fps |
 | **Bitrate** | 2-6 Mbps | 1-50 Mbps |
 
+### Optimal Encoding Settings for System Stability
+
+To achieve maximum stability across all system components (Controller → Receiver → RTMP Server → Relay), use these specific encoding settings:
+
+#### Recommended FFmpeg Command
+```bash
+ffmpeg -i input.mp4 \
+  -c:v libx264 -preset medium -crf 21 \
+  -maxrate 4000k -bufsize 8000k \
+  -pix_fmt yuv420p -profile:v high -level 4.0 \
+  -r 30 -g 60 -keyint_min 30 -sc_threshold 0 \
+  -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30" \
+  -aspect 16:9 \
+  -c:a aac -b:a 192k -ar 48000 -ac 2 -profile:a aac_low \
+  -movflags +faststart \
+  output.mp4
+```
+
+#### Setting Details
+
+**Video Configuration:**
+- **Codec**: `libx264` - Maximum compatibility across all components
+- **Preset**: `medium` - Balance between encoding speed and quality
+- **CRF**: `21` - High quality constant rate factor
+- **Rate Control**: `maxrate 4000k -bufsize 8000k` - Prevents UDP overflow
+- **Pixel Format**: `yuv420p` - Universal compatibility
+- **Profile/Level**: `high@4.0` - Optimal for streaming platforms
+- **Frame Rate**: `30fps` - Stable UDP transmission
+- **GOP**: `60 frames (2s)` - Good seek performance and stability
+- **Scene Detection**: Disabled (`-sc_threshold 0`) - Predictable bitrate
+
+**Audio Configuration:**
+- **Codec**: `aac` - Standard for RTMP streaming
+- **Bitrate**: `192k` - High quality audio
+- **Sample Rate**: `48000Hz` - Broadcast standard
+- **Channels**: `2` (stereo) - Standard configuration
+- **Profile**: `aac_low` - Maximum compatibility
+
+**Video Processing:**
+- **Resolution**: Normalized to 1920x1080 with black padding
+- **Aspect Ratio**: Forced to 16:9 for consistent output
+- **Scaling**: Maintains original aspect ratio, adds black bars if needed
+
+#### Why These Settings?
+
+- **Controller (UDP Sender)**: Fixed frame rate and bitrate limits ensure stable UDP transmission
+- **Receiver (UDP to RTMP)**: Standard H.264 profile ensures reliable decoding
+- **RTMP Server**: Level 4.0 and AAC Low profile are universally supported
+- **Relay (Re-streaming)**: Consistent 1920x1080 output simplifies relay processing
+
+These settings prioritize system stability over file size optimization and are specifically tuned for real-time streaming workflows.
+
 ## 📡 API Reference
 
 ### Stream Management
