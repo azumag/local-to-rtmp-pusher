@@ -9,6 +9,7 @@
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
       "Bash(git commit:*)",
+      "Bash(git commit -m:*)",
       "Bash(npm test)",
       "Bash(npm test:*)",
       "Bash(npx husky init:*)",
@@ -94,7 +95,21 @@
       "Bash(npm ci:*)",
       "Bash(npm start)",
       "Bash(kill:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(tree:*)",
+      "Bash(terraform plan:*)",
+      "Bash(terraform apply:*)",
+      "Bash(aws lightsail get-blueprints:*)",
+      "Bash(ssh:*)",
+      "Bash(aws lightsail get-instance:*)",
+      "Bash(nc:*)",
+      "Bash(terraform output:*)",
+      "Bash(ping:*)",
+      "Bash(aws lightsail get-key-pairs:*)",
+      "Bash(aws lightsail get-static-ip:*)",
+      "Bash(terraform:*)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }

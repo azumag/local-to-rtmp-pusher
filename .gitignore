@@ -67,3 +67,17 @@ test-data/
 .turbo/
 
 videos/*
+
+# AWS CLI installer (macOS)
+AWSCLIV2.pkg
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/bootstrap/.terraform/
+terraform/bootstrap/*.tfstate
+terraform/bootstrap/*.tfstate.*
+terraform/bootstrap/.terraform.lock.hcl

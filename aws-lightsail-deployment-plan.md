@@ -3,12 +3,16 @@
 ## 📋 概要
 
 StreamCasterシステムをAWS Lightsailで運用するための包括的なデプロイメント計画書です。
+Terraform Infrastructure as Code (IaC) を活用した自動化デプロイメントに対応しています。
 
 ### プロジェクト詳細
 - **プロジェクト名**: StreamCaster
 - **システム種別**: UDP-to-RTMP 動的動画配信システム
 - **作成日**: 2025年6月6日
+- **更新日**: 2025年6月6日（Terraform対応）
 - **対象環境**: AWS Lightsail 本番環境
+- **インフラ管理**: Terraform v1.5+
+- **デプロイ方式**: Infrastructure as Code (IaC)
 
 ## 🎯 推奨構成
 
@@ -68,9 +72,67 @@ StreamCasterシステムをAWS Lightsailで運用するための包括的なデ�
 
 ## 🚀 デプロイメント手順
 
-### Phase 1: インフラ構築
+### 方法 A: Terraformでの自動デプロイメント（推奨）
 
-#### 1.1 Lightsailインスタンス作成
+#### A.1 前提条件
+```bash
+# Terraformのインストール
+wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+unzip terraform_1.6.0_linux_amd64.zip
+sudo mv terraform /usr/local/bin/
+
+# AWS CLIの設定
+aws configure
+```
+
+#### A.2 Terraform環境の初期化
+```bash
+# プロジェクトディレクトリに移動
+cd streamcaster/terraform
+
+# 環境変数の設定
+export TF_VAR_stream_key="your_stream_key_here"
+export TF_VAR_rtmp_server="rtmp://live.twitch.tv/live"
+
+# Terraform設定ファイルのコピー
+cp terraform.tfvars.example terraform.tfvars
+# terraform.tfvarsを編集して環境に合わせて設定
+
+# 本番環境の場合
+cp environments/prod/terraform.tfvars ./terraform.tfvars
+```
+
+#### A.3 インフラストラクチャのデプロイ
+```bash
+# Terraformの初期化
+terraform init
+
+# プランの確認
+terraform plan
+
+# インフラの作成
+terraform apply
+
+# デプロイ情報の確認
+terraform output
+```
+
+#### A.4 アプリケーションの確認
+```bash
+# 出力されたURLでアクセステスト
+WEB_UI_URL=$(terraform output -raw web_ui_url)
+curl $WEB_UI_URL/api/health
+
+# SSHでインスタンスに接続
+SSH_COMMAND=$(terraform output -raw ssh_command)
+$SSH_COMMAND
+```
+
+---
+
+### 方法 B: 手動デプロイメント（レガシー）
+
+#### B.1 Lightsailインスタンス作成
 ```bash
 # AWS CLI でのインスタンス作成
 aws lightsail create-instances \
@@ -88,7 +150,7 @@ aws lightsail attach-static-ip \
   --instance-name "streamcaster-prod"
 ```
 
-#### 1.2 ファイアウォール設定
+#### B.2 ファイアウォール設定
 ```bash
 # Webコントロールページ（特定IPのみ推奨）
 aws lightsail open-instance-public-ports \
@@ -369,29 +431,37 @@ rm -rf logs/*.log.gz                 # 古いログ削除
 
 ### 事前準備
 - [ ] AWS アカウント設定完了
+- [ ] AWS CLI設定完了
+- [ ] Terraform v1.5+インストール完了
+- [ ] SSHキーペア準備（~/.ssh/id_rsa.pub）
 - [ ] Lightsail利用リージョン決定
-- [ ] 静的IP取得準備
+- [ ] ストリームキー取得（Twitch/YouTube等）
 - [ ] ドメイン設定（オプション）
 
-### インフラ構築
-- [ ] Lightsailインスタンス作成
-- [ ] 静的IP割り当て
-- [ ] ファイアウォール設定
-- [ ] SSH接続確認
+### インフラ構築（Terraform）
+- [ ] terraform.tfvarsファイル設定
+- [ ] 環境変数設定（TF_VAR_stream_key等）
+- [ ] terraform init 実行
+- [ ] terraform plan 確認
+- [ ] terraform apply 実行
+- [ ] terraform output 確認
 
-### アプリケーション設定
-- [ ] Docker環境構築
-- [ ] アプリケーションクローン
-- [ ] 環境変数設定
-- [ ] 初期起動テスト
+### アプリケーション確認（自動実行）
+- [ ] User Dataスクリプトによる自動セットアップ完了
+- [ ] Docker環境自動構築確認
+- [ ] アプリケーション自動クローン確認
+- [ ] .env.production自動作成確認
+- [ ] コンテナ自動起動確認
 
 ### 運用開始前確認
-- [ ] Web UIアクセス確認
-- [ ] RTMP接続テスト
+- [ ] terraform outputでURL情報取得
+- [ ] Web UIアクセス確認（terraform output web_ui_url）
+- [ ] APIヘルスチェック確認（/api/health）
+- [ ] RTMP接続テスト（terraform output rtmp_pull_url）
 - [ ] 動画切り替えテスト
 - [ ] 外部配信テスト
 - [ ] ログ出力確認
-- [ ] バックアップ設定
+- [ ] 自動スナップショット作成確認
 
 ### 運用開始後
 - [ ] 監視設定
@@ -423,9 +493,75 @@ rm -rf logs/*.log.gz                 # 古いログ削除
 3. 手動復旧実施
 4. 必要に応じてサポート連絡
 
+## 🛠️ Terraform管理コマンド
+
+### 日常運用
+```bash
+# 状態確認
+terraform show
+terraform output
+
+# インスタンス情報更新
+terraform refresh
+terraform plan
+
+# 設定変更の適用
+terraform apply
+
+# リソースの削除（注意）
+terraform destroy
+```
+
+### バックアップと復旧
+```bash
+# 状態ファイルのバックアップ
+cp terraform.tfstate terraform.tfstate.backup.$(date +%Y%m%d)
+
+# スナップショットからの復旧
+# AWS Consoleまたはterraform importで対応
+```
+
+### 環境別管理
+```bash
+# 開発環境
+terraform apply -var-file="environments/dev/terraform.tfvars"
+
+# 本番環境
+terraform apply -var-file="environments/prod/terraform.tfvars"
+
+# ステージング環境
+terraform apply -var-file="environments/staging/terraform.tfvars"
+```
+
+## 🔄 アップデート手順
+
+### アプリケーション更新
+```bash
+# SSHでインスタンスに接続
+SSH_COMMAND=$(terraform output -raw ssh_command)
+$SSH_COMMAND
+
+# アプリケーション更新
+cd /home/ubuntu/streamcaster
+git pull origin main
+docker-compose --env-file .env.production down
+docker-compose --env-file .env.production up -d --build
+```
+
+### インフラ更新
+```bash
+# Terraform設定変更
+# terraform.tfvarsを編集
+
+# 変更の確認と適用
+terraform plan
+terraform apply
+```
+
 ---
 
 **作成日**: 2025年6月6日  
-**最終更新**: 2025年6月6日  
-**バージョン**: 1.0  
-**作成者**: Claude Code Assistant
+**最終更新**: 2025年6月6日（Terraform対応）  
+**バージョン**: 2.0  
+**作成者**: Claude Code Assistant  
+**管理方式**: Infrastructure as Code (Terraform)

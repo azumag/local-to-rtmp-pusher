@@ -70,12 +70,12 @@ locals {
   ]
   
   # User data script for instance initialization (nano-optimized)
-  user_data = base64encode(templatefile("${path.module}/templates/user-data-nano.sh", {
+  user_data = templatefile("${path.module}/templates/user-data-nano.sh", {
     repository_url = var.repository_url
     branch         = var.deployment_branch
     rtmp_server    = var.rtmp_server
     stream_key     = var.stream_key
     log_level      = var.log_level
     environment    = var.environment
-  }))
+  })
 }

@@ -1,0 +1,147 @@
+version: '3.8'
+
+# Optimized for AWS Lightsail nano instance (1GB RAM)
+services:
+  rtmp-server:
+    build:
+      context: rtmp-server
+      dockerfile: Dockerfile
+    container_name: streaming-rtmp-server
+    hostname: rtmp-server
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.5
+    ports:
+      - "1935:1935"  # RTMP port
+      - "8081:8080"   # Stats/monitoring port
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  controller:
+    build:
+      context: .
+      dockerfile: Dockerfile.controller
+    container_name: streaming-controller
+    hostname: controller
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.12
+    ports:
+      - "8080:8080"
+    volumes:
+      - videos:/app/videos:ro
+      - logs:/app/logs
+      - config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=8080
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.41}
+      - UDP_TARGET=${UDP_HOST:-172.20.0.10}:${UDP_PORT:-1234}
+      - RTMP_SERVER=${RTMP_SERVER}
+      - STREAM_KEY=${STREAM_KEY}
+      - GOOGLE_DRIVE_API_KEY=${GOOGLE_DRIVE_API_KEY}
+      # Optimized video settings for nano instance
+      - VIDEO_BITRATE=${VIDEO_BITRATE:-1000k}
+      - AUDIO_BITRATE=${AUDIO_BITRATE:-64k}
+      - VIDEO_GOP_SIZE=${VIDEO_GOP_SIZE:-60}
+      - VIDEO_PRESET=${VIDEO_PRESET:-fast}
+    depends_on:
+      - rtmp-server
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 256M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
+
+  # Receiver service - only start if needed
+  receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile.receiver
+    container_name: streaming-receiver
+    hostname: receiver
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "1234:1234/udp"
+    volumes:
+      - logs:/app/logs
+      - config:/app/config
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Asia/Tokyo}
+      - RTMP_SERVER=${RTMP_SERVER}
+      - STREAM_KEY=${STREAM_KEY}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    profiles:
+      - full  # Only start with --profile full
+
+  # Relay service - only start if needed  
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    container_name: streaming-relay
+    hostname: relay
+    networks:
+      streaming-network:
+        ipv4_address: 172.20.0.11
+    depends_on:
+      - rtmp-server
+    environment:
+      - RELAY_TARGET=${RELAY_TARGET:-rtmp://}
+      - RTMP_SERVER=${RTMP_SERVER}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+    profiles:
+      - full  # Only start with --profile full
+
+volumes:
+  videos:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./videos
+  logs:
+    driver: local
+  config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./config
+
+networks:
+  streaming-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
