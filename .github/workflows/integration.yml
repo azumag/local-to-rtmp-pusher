@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, development]
 
+# Prevent concurrent integration tests
+concurrency:
+  group: streamcaster-integration-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   full-system-test:
     name: Full System Integration Test

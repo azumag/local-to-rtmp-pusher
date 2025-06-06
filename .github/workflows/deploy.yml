@@ -15,6 +15,11 @@ env:
   AWS_REGION: ap-northeast-1
   TERRAFORM_VERSION: 1.9.0
 
+# Prevent concurrent deployments
+concurrency:
+  group: streamcaster-deployment
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy StreamCaster
@@ -46,7 +51,7 @@ jobs:
       run: |
         # Remove potentially corrupted state cache
         rm -rf .terraform
-        terraform init -reconfigure
+        terraform init -reconfigure -lock-timeout=300s
       
     - name: Terraform Validate
       working-directory: terraform
@@ -54,7 +59,7 @@ jobs:
       
     - name: Terraform Plan
       working-directory: terraform
-      run: terraform plan -detailed-exitcode
+      run: terraform plan -detailed-exitcode -lock-timeout=300s
       id: plan
       continue-on-error: true
       
@@ -95,7 +100,7 @@ jobs:
     - name: Terraform Apply
       if: steps.deploy_check.outputs.deploy_needed == 'true'
       working-directory: terraform
-      run: terraform apply -auto-approve
+      run: terraform apply -auto-approve -lock-timeout=300s
       
     - name: Get instance information
       if: steps.deploy_check.outputs.deploy_needed == 'true'
