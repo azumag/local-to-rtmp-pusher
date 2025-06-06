@@ -67,6 +67,7 @@ test-data/
 .turbo/
 
 videos/*
+!videos/standby.mp4
 
 # AWS CLI installer (macOS)
 AWSCLIV2.pkg
