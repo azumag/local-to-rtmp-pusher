@@ -81,6 +81,11 @@ fi
 sudo -u $APP_USER git clone --branch $DEPLOYMENT_BRANCH $REPOSITORY_URL streamcaster
 cd streamcaster
 
+# Set up tracking for main branch for auto-updates
+sudo -u $APP_USER git remote set-url origin $REPOSITORY_URL
+sudo -u $APP_USER git fetch origin
+sudo -u $APP_USER git branch --track main origin/main 2>/dev/null || true
+
 # === SETUP APPLICATION DIRECTORIES ===
 echo "Setting up application directories..."
 sudo -u $APP_USER mkdir -p videos logs temp_downloads
@@ -256,14 +261,85 @@ EOF
 
 chmod +x $APP_DIR/scripts/health-monitor.sh
 
+# === SETUP AUTO-UPDATE SCRIPT ===
+echo "Creating auto-update script..."
+sudo -u $APP_USER cat > $APP_DIR/scripts/auto-update.sh << 'EOF'
+#!/bin/bash
+# Auto-update script for StreamCaster
+
+LOG_FILE="/home/ubuntu/streamcaster/logs/auto-update.log"
+DATE=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Function to log messages
+log_message() {
+    echo "[$DATE] $1" >> $LOG_FILE
+}
+
+# Check for updates and restart if needed
+update_and_restart() {
+    cd /home/ubuntu/streamcaster
+    
+    # Fetch latest changes from main branch
+    git fetch origin main
+    
+    # Check if there are new commits
+    local local_commit=$(git rev-parse HEAD)
+    local remote_commit=$(git rev-parse origin/main)
+    
+    if [ "$local_commit" != "$remote_commit" ]; then
+        log_message "INFO: New commits detected on main branch, updating..."
+        
+        # Pull latest changes from main
+        git pull origin main
+        
+        if [ $? -eq 0 ]; then
+            log_message "INFO: Git pull successful, restarting containers..."
+            
+            # Restart all containers to apply changes
+            docker-compose --env-file .env.production restart
+            
+            if [ $? -eq 0 ]; then
+                log_message "INFO: Container restart successful"
+                
+                # Wait a bit and verify health
+                sleep 10
+                if curl -f http://localhost:8080/api/health >/dev/null 2>&1; then
+                    log_message "INFO: Application health check passed after update"
+                else
+                    log_message "WARNING: Application health check failed after update"
+                fi
+            else
+                log_message "ERROR: Container restart failed"
+            fi
+        else
+            log_message "ERROR: Git pull failed"
+        fi
+    else
+        log_message "INFO: No updates available"
+    fi
+}
+
+# Main execution
+main() {
+    log_message "INFO: Starting auto-update check"
+    update_and_restart
+    log_message "INFO: Auto-update check completed"
+}
+
+main "$@"
+EOF
+
+chmod +x $APP_DIR/scripts/auto-update.sh
+
 # === SETUP CRON JOBS ===
 echo "Setting up cron jobs..."
-sudo -u $APP_USER crontab -l 2>/dev/null | { cat; echo "*/5 * * * * /home/ubuntu/streamcaster/scripts/health-monitor.sh"; } | sudo -u $APP_USER crontab -
+sudo -u $APP_USER crontab -l 2>/dev/null | { cat; echo "*/5 * * * * /home/ubuntu/streamcaster/scripts/health-monitor.sh"; echo "*/10 * * * * /home/ubuntu/streamcaster/scripts/auto-update.sh"; } | sudo -u $APP_USER crontab -
 
 # === PULL DOCKER IMAGES AND START APPLICATION ===
 echo "Starting StreamCaster application..."
 cd $APP_DIR
 sudo -u $APP_USER docker-compose --env-file .env.production pull
+sudo -u $APP_USER docker-compose --env-file .env.production build receiver relay
 sudo -u $APP_USER docker-compose --env-file .env.production up -d
 
 # === ENABLE AND START SERVICE ===
