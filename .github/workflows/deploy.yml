@@ -62,10 +62,42 @@ jobs:
       run: terraform plan -detailed-exitcode -lock-timeout=300s
       id: plan
       continue-on-error: true
-      
+      env:
+        TF_VAR_environment: prod
+        TF_VAR_project_name: streamcaster
+        TF_VAR_owner: azumag
+        TF_VAR_instance_bundle_id: micro_2_0
+        TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
+        TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
+        TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
+        TF_VAR_repository_url: https://github.com/azumag/local-to-rtmp-pusher.git
+        TF_VAR_deployment_branch: main
+        TF_VAR_rtmp_server: rtmp://rtmp-server:1935/live/stream
+        TF_VAR_stream_key: hoge
+        TF_VAR_relay_target: rtmp://ingest.vrcdn.live/live/vrcdn_b191faef-e74f-4649-b0d9-cb0bf0a2d92cl
+        TF_VAR_log_level: info
+        TF_VAR_ssh_public_key_path: ""
+        TF_VAR_google_drive_api_key: AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
+        
     - name: Terraform Apply
       working-directory: terraform
       run: terraform apply -auto-approve -lock-timeout=300s
+      env:
+        TF_VAR_environment: prod
+        TF_VAR_project_name: streamcaster
+        TF_VAR_owner: azumag
+        TF_VAR_instance_bundle_id: micro_2_0
+        TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
+        TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
+        TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
+        TF_VAR_repository_url: https://github.com/azumag/local-to-rtmp-pusher.git
+        TF_VAR_deployment_branch: main
+        TF_VAR_rtmp_server: rtmp://rtmp-server:1935/live/stream
+        TF_VAR_stream_key: hoge
+        TF_VAR_relay_target: rtmp://ingest.vrcdn.live/live/vrcdn_b191faef-e74f-4649-b0d9-cb0bf0a2d92cl
+        TF_VAR_log_level: info
+        TF_VAR_ssh_public_key_path: ""
+        TF_VAR_google_drive_api_key: AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
       
     - name: Get instance information
       working-directory: terraform
