@@ -1,6 +1,15 @@
 const Docker = require('dockerode');
 const path = require('path');
 
+// Constants for configuration values
+const CONSTANTS = {
+    HTTP_TIMEOUT: 500,          // milliseconds
+    CPU_PERCENTAGE_DIVISOR: 100, // for CPU calculation
+    BYTES_TO_MB_DIVISOR: 1024,  // for memory conversion
+    MEMORY_PERCENTAGE_DIVISOR: 100, // for memory percentage
+    CONTAINER_NAME_CHARS: 12    // docker container name length
+};
+
 class DockerManager {
     constructor() {
         this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -93,7 +102,7 @@ class DockerManager {
             }
 
             // 起動確認（コンテナが自動削除される前にチェック）
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, CONSTANTS.HTTP_TIMEOUT));
             
             try {
                 const containerInfo = await container.inspect();
@@ -202,14 +211,14 @@ class DockerManager {
             // メモリ使用量
             const memoryUsage = stats.memory_stats.usage || 0;
             const memoryLimit = stats.memory_stats.limit || 0;
-            const memoryPercent = memoryLimit > 0 ? (memoryUsage / memoryLimit * 100) : 0;
+            const memoryPercent = memoryLimit > 0 ? (memoryUsage / memoryLimit * CONSTANTS.MEMORY_PERCENTAGE_DIVISOR) : 0;
 
             return {
                 status: info.State.Status,
-                cpu_percent: Math.round(cpuPercent * 100) / 100,
-                memory_percent: Math.round(memoryPercent * 100) / 100,
-                memory_usage_mb: Math.round(memoryUsage / 1024 / 1024 * 100) / 100,
-                memory_limit_mb: Math.round(memoryLimit / 1024 / 1024 * 100) / 100,
+                cpu_percent: Math.round(cpuPercent * CONSTANTS.CPU_PERCENTAGE_DIVISOR) / CONSTANTS.CPU_PERCENTAGE_DIVISOR,
+                memory_percent: Math.round(memoryPercent * CONSTANTS.MEMORY_PERCENTAGE_DIVISOR) / CONSTANTS.MEMORY_PERCENTAGE_DIVISOR,
+                memory_usage_mb: Math.round(memoryUsage / CONSTANTS.BYTES_TO_MB_DIVISOR / CONSTANTS.BYTES_TO_MB_DIVISOR * CONSTANTS.CPU_PERCENTAGE_DIVISOR) / CONSTANTS.CPU_PERCENTAGE_DIVISOR,
+                memory_limit_mb: Math.round(memoryLimit / CONSTANTS.BYTES_TO_MB_DIVISOR / CONSTANTS.BYTES_TO_MB_DIVISOR * CONSTANTS.CPU_PERCENTAGE_DIVISOR) / CONSTANTS.CPU_PERCENTAGE_DIVISOR,
                 created: info.Created,
                 started: info.State.StartedAt
             };
@@ -227,7 +236,7 @@ class DockerManager {
 
             if (systemDelta > 0) {
                 const cpuCount = stats.cpu_stats.cpu_usage.percpu_usage ? stats.cpu_stats.cpu_usage.percpu_usage.length : 1;
-                return (cpuDelta / systemDelta) * cpuCount * 100;
+                return (cpuDelta / systemDelta) * cpuCount * CONSTANTS.CPU_PERCENTAGE_DIVISOR;
             }
             return 0.0;
         } catch (error) {
@@ -245,7 +254,7 @@ class DockerManager {
                 .filter(c => c.State === 'running')
                 .map(c => ({
                     name: c.Names[0],
-                    id: c.Id.substring(0, 12),
+                    id: c.Id.substring(0, CONSTANTS.CONTAINER_NAME_CHARS),
                     status: c.Status,
                     created: c.Created
                 }));

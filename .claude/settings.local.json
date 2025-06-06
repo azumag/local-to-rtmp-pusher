@@ -109,7 +109,12 @@
       "Bash(aws lightsail get-key-pairs:*)",
       "Bash(aws lightsail get-static-ip:*)",
       "Bash(terraform:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run watch:*)",
+      "Bash(gh workflow run:*)"
     ],
     "deny": []
   }

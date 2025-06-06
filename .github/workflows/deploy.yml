@@ -63,54 +63,17 @@ jobs:
       id: plan
       continue-on-error: true
       
-    - name: Check if deployment needed
-      id: deploy_check
-      run: |
-        # Check for infrastructure changes
-        INFRA_CHANGES=false
-        if [ "${{ steps.plan.outputs.exitcode }}" = "2" ]; then
-          INFRA_CHANGES=true
-          echo "Infrastructure changes detected"
-        fi
-        
-        # Check for application changes that require redeployment
-        APP_CHANGES=false
-        if git diff --name-only HEAD~1 HEAD | grep -E "(scripts/|controller/|config/|docker|\.env)" > /dev/null; then
-          APP_CHANGES=true
-          echo "Application changes detected:"
-          git diff --name-only HEAD~1 HEAD | grep -E "(scripts/|controller/|config/|docker|\.env)"
-        fi
-        
-        # Force deploy option
-        FORCE_DEPLOY=false
-        if [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
-          FORCE_DEPLOY=true
-          echo "Force deploy requested"
-        fi
-        
-        # Determine if deployment is needed
-        if [ "$INFRA_CHANGES" = "true" ] || [ "$APP_CHANGES" = "true" ] || [ "$FORCE_DEPLOY" = "true" ]; then
-          echo "deploy_needed=true" >> $GITHUB_OUTPUT
-          echo "Deployment needed: Infrastructure=$INFRA_CHANGES, Application=$APP_CHANGES, Force=$FORCE_DEPLOY"
-        else
-          echo "deploy_needed=false" >> $GITHUB_OUTPUT
-          echo "No deployment needed: No infrastructure or application changes"
-        fi
-        
     - name: Terraform Apply
-      if: steps.deploy_check.outputs.deploy_needed == 'true'
       working-directory: terraform
       run: terraform apply -auto-approve -lock-timeout=300s
       
     - name: Get instance information
-      if: steps.deploy_check.outputs.deploy_needed == 'true'
       working-directory: terraform
       run: |
         echo "Instance deployed successfully!"
         terraform output
         
     - name: Wait for instance to be ready
-      if: steps.deploy_check.outputs.deploy_needed == 'true'
       run: |
         INSTANCE_IP=$(cd terraform && terraform output -raw static_ip_address)
         echo "Waiting for instance $INSTANCE_IP to be ready..."
@@ -128,7 +91,6 @@ jobs:
         '
         
     - name: Verify deployment
-      if: steps.deploy_check.outputs.deploy_needed == 'true'
       run: |
         INSTANCE_IP=$(cd terraform && terraform output -raw static_ip_address)
         echo "Verifying deployment at $INSTANCE_IP..."
@@ -153,17 +115,6 @@ jobs:
         echo "🌐 Web UI: http://$INSTANCE_IP:8080"
         echo "📊 RTMP Stats: http://$INSTANCE_IP:8081/stat"
         echo "📺 RTMP URL: rtmp://$INSTANCE_IP:1935/live/stream"
-        
-    - name: Trigger auto-update on existing instance
-      if: steps.deploy_check.outputs.deploy_needed == 'false'
-      run: |
-        INSTANCE_IP=$(cd terraform && terraform output -raw static_ip_address)
-        echo "No infrastructure changes, triggering auto-update on existing instance..."
-        
-        # The auto-update script on the server will detect the new commits
-        # and automatically update the application
-        echo "Auto-update will be triggered by the cron job within 10 minutes."
-        echo "Current instance: http://$INSTANCE_IP:8080"
 
   notify:
     name: Notify deployment status

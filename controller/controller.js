@@ -19,7 +19,8 @@ const HTTP_STATUS = {
 const CONFIG = {
     HTTP_PORT: 8080,
     EXIT_CODE_SUCCESS: 0,
-    EXIT_CODE_ERROR: 1
+    EXIT_CODE_ERROR: 1,
+    DEFAULT_LOG_LINES: 100
 };
 
 // ロガー設定
@@ -172,7 +173,7 @@ app.get('/api/videos', async (req, res) => {
 app.post('/api/switch', async (req, res) => {
     try {
         if (!processManager) {
-            return res.status(500).json({ 
+            return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
                 success: false, 
                 error: 'ProcessManager not initialized' 
             });
@@ -180,7 +181,7 @@ app.post('/api/switch', async (req, res) => {
 
         const { video, source = 'local', googledriveFileId } = req.body;
         if (!video) {
-            return res.status(400).json({ 
+            return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
                 success: false, 
                 error: 'video parameter required' 
             });
@@ -196,7 +197,7 @@ app.post('/api/switch', async (req, res) => {
             // Google Driveファイルの処理
             if (!googleDriveManager || !googleDriveManager.isAuthenticated()) {
                 streamStatus = 'stopped'; // エラー時は状態をリセット
-                return res.status(500).json({ 
+                return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
                     success: false, 
                     error: 'Google Drive not available or not authenticated' 
                 });
@@ -204,7 +205,7 @@ app.post('/api/switch', async (req, res) => {
 
             if (!googledriveFileId) {
                 streamStatus = 'stopped'; // エラー時は状態をリセット
-                return res.status(400).json({ 
+                return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
                     success: false, 
                     error: 'googledriveFileId parameter required for Google Drive videos' 
                 });
@@ -232,7 +233,7 @@ app.post('/api/switch', async (req, res) => {
             } catch (downloadError) {
                 log.error(`Google Drive動画ダウンロードエラー: ${downloadError.message}`);
                 streamStatus = 'stopped'; // エラー時は停止状態に戻す
-                return res.status(500).json({
+                return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
                     success: false,
                     error: `Google Drive download failed: ${downloadError.message}`
                 });
@@ -244,7 +245,7 @@ app.post('/api/switch', async (req, res) => {
             const videoPath = path.join(__dirname, 'videos', video);
             if (!(await fs.pathExists(videoPath))) {
                 streamStatus = 'stopped'; // エラー時は状態をリセット
-                return res.status(404).json({ 
+                return res.status(HTTP_STATUS.NOT_FOUND).json({ 
                     success: false, 
                     error: `Video file not found: ${video}` 
                 });
@@ -253,7 +254,7 @@ app.post('/api/switch', async (req, res) => {
             // パス検証（セキュリティ）
             if (video.includes('..') || video.startsWith('/')) {
                 streamStatus = 'stopped'; // エラー時は状態をリセット
-                return res.status(400).json({ 
+                return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
                     success: false, 
                     error: 'Invalid file path' 
                 });
@@ -283,7 +284,7 @@ app.post('/api/switch', async (req, res) => {
         } else {
             log.error(`動画切り替え失敗: ${result.error}`);
             streamStatus = 'stopped'; // 失敗時は停止状態に戻す
-            res.status(500).json({
+            res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
                 success: false,
                 error: result.error
             });
@@ -291,7 +292,7 @@ app.post('/api/switch', async (req, res) => {
     } catch (error) {
         log.error(`Switch API error: ${error.message}`);
         streamStatus = 'stopped'; // エラー時は停止状態に戻す
-        res.status(500).json({ 
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
             success: false, 
             error: error.message 
         });
@@ -302,7 +303,7 @@ app.post('/api/switch', async (req, res) => {
 app.post('/api/stop', async (req, res) => {
     try {
         if (!processManager) {
-            return res.status(500).json({ 
+            return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
                 success: false, 
                 error: 'ProcessManager not initialized' 
             });
@@ -322,14 +323,14 @@ app.post('/api/stop', async (req, res) => {
             });
         } else {
             log.error(`配信停止失敗: ${result.error}`);
-            res.status(500).json({
+            res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
                 success: false,
                 error: result.error
             });
         }
     } catch (error) {
         log.error(`Stop API error: ${error.message}`);
-        res.status(500).json({ 
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
             success: false, 
             error: error.message 
         });
@@ -340,7 +341,7 @@ app.post('/api/stop', async (req, res) => {
 app.post('/api/googledrive/files', async (req, res) => {
     try {
         if (!googleDriveManager || !googleDriveManager.isAuthenticated()) {
-            return res.status(500).json({
+            return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
                 success: false,
                 error: 'Google Drive not available or not authenticated'
             });
@@ -348,7 +349,7 @@ app.post('/api/googledrive/files', async (req, res) => {
 
         const { folderLink } = req.body;
         if (!folderLink) {
-            return res.status(400).json({
+            return res.status(HTTP_STATUS.BAD_REQUEST).json({
                 success: false,
                 error: 'folderLink parameter required'
             });
@@ -357,7 +358,7 @@ app.post('/api/googledrive/files', async (req, res) => {
         // フォルダIDを抽出
         const folderId = googleDriveManager.extractFolderIdFromLink(folderLink);
         if (!folderId) {
-            return res.status(400).json({
+            return res.status(HTTP_STATUS.BAD_REQUEST).json({
                 success: false,
                 error: 'Invalid Google Drive folder link or ID'
             });
@@ -368,7 +369,7 @@ app.post('/api/googledrive/files', async (req, res) => {
         // フォルダアクセステスト
         const hasAccess = await googleDriveManager.testAccess(folderId);
         if (!hasAccess) {
-            return res.status(403).json({
+            return res.status(HTTP_STATUS.FORBIDDEN).json({
                 success: false,
                 error: 'Cannot access the specified folder. Check if the folder is public or sharing settings.'
             });
@@ -386,7 +387,7 @@ app.post('/api/googledrive/files', async (req, res) => {
 
     } catch (error) {
         log.error(`Google Drive files API error: ${error.message}`);
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
             success: false,
             error: error.message
         });
@@ -406,7 +407,7 @@ app.get('/api/googledrive/status', async (req, res) => {
         });
     } catch (error) {
         log.error(`Google Drive status API error: ${error.message}`);
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
             error: error.message
         });
     }
@@ -416,7 +417,7 @@ app.get('/api/googledrive/status', async (req, res) => {
 app.post('/api/googledrive/cleanup', async (req, res) => {
     try {
         if (!googleDriveManager) {
-            return res.status(500).json({
+            return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
                 success: false,
                 error: 'Google Drive not available'
             });
@@ -430,7 +431,7 @@ app.post('/api/googledrive/cleanup', async (req, res) => {
         });
     } catch (error) {
         log.error(`Google Drive cleanup API error: ${error.message}`);
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
             success: false,
             error: error.message
         });
@@ -456,7 +457,7 @@ app.get('/api/health', async (req, res) => {
         });
     } catch (error) {
         log.error(`Health API error: ${error.message}`);
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
             status: 'error',
             error: error.message
         });
@@ -467,7 +468,7 @@ app.get('/api/health', async (req, res) => {
 app.get('/api/logs', async (req, res) => {
     try {
         const logType = req.query.type || 'controller';
-        const lines = parseInt(req.query.lines) || 100;
+        const lines = parseInt(req.query.lines) || CONFIG.DEFAULT_LOG_LINES;
 
         // シンプルなログ実装 - 実際にはファイルから読み込むかメモリに保存
         const logs = [`[${new Date().toISOString()}] Log type: ${logType}`, 'System is running...'];
@@ -485,12 +486,12 @@ app.get('/api/logs', async (req, res) => {
 
 // エラーハンドラー
 app.use((req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
+    res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Endpoint not found' });
 });
 
 app.use((error, req, res, _next) => {
     log.error(`Express error: ${error.message}`);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: 'Internal server error' });
 });
 
 // サーバー起動

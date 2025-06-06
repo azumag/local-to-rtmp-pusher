@@ -2,6 +2,13 @@ const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 
+// Constants for configuration values
+const CONSTANTS = {
+    PROCESS_CHECK_INTERVAL: 1000, // milliseconds
+    PROCESS_KILL_TIMEOUT: 5000,   // milliseconds
+    STANDBY_LOOP_COUNT: 1000      // number of standby video repeats
+};
+
 class ProcessManager {
     constructor() {
         this.udpSenderProcess = null;  // 動画→UDP送信プロセス
@@ -306,7 +313,7 @@ class ProcessManager {
             const playlistContent = [
                 `file '${mainVideoPath.replace(/'/g, '\'\\\'\'')}' # main video`,
                 // スタンバイ動画を多数回追加（実質無限ループ効果）
-                ...Array(1000).fill().map(() => `file '${standbyVideoPath.replace(/'/g, '\'\\\'\'')}' # standby`)
+                ...Array(CONSTANTS.STANDBY_LOOP_COUNT).fill().map(() => `file '${standbyVideoPath.replace(/'/g, '\'\\\'\'')}' # standby`)
             ].join('\n');
             
             await fs.writeFile(playlistPath, playlistContent, 'utf8');
@@ -427,7 +434,7 @@ class ProcessManager {
                         this.udpSenderProcess.kill('SIGKILL');
                     }
                     resolve();
-                }, 5000);
+                }, CONSTANTS.PROCESS_KILL_TIMEOUT);
 
                 if (this.udpSenderProcess) {
                     this.udpSenderProcess.on('close', () => {

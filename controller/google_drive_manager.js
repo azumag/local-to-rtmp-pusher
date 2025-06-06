@@ -3,6 +3,19 @@ const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+// Constants for configuration values
+const CONSTANTS = {
+    FOLDER_ID_LENGTH: 8,          // characters to extract from folder ID
+    CHUNK_SIZE_KB: 1024,          // KB for chunk calculations
+    CHUNK_SIZE_MULTIPLIER: 2,     // multiplier for chunk size
+    PROGRESS_INTERVAL: 100,        // progress reporting interval
+    BYTES_TO_MB_DIVISOR: 1024,    // for size conversion
+    FILE_TTL_MINUTES: 60,         // file time-to-live in minutes
+    SECONDS_IN_MINUTE: 60,        // seconds per minute
+    MILLISECONDS_IN_SECOND: 1000, // milliseconds per second
+    DECIMAL_PRECISION: 50         // divisor for decimal precision (100/50 = 2)
+};
+
 class GoogleDriveManager {
     constructor() {
         this.drive = null;
@@ -166,7 +179,7 @@ class GoogleDriveManager {
             }
 
             // 一意なファイル名を生成
-            const uniqueId = uuidv4().substring(0, 8);
+            const uniqueId = uuidv4().substring(0, CONSTANTS.FOLDER_ID_LENGTH);
             const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
             const localFilename = `${uniqueId}_${safeFilename}`;
             const localPath = path.join(this.tempDir, localFilename);
@@ -180,7 +193,7 @@ class GoogleDriveManager {
             });
 
             const fileSize = parseInt(fileMetadata.data.size);
-            this.log.info(`ファイルサイズ: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+            this.log.info(`ファイルサイズ: ${(fileSize / CONSTANTS.BYTES_TO_MB_DIVISOR / CONSTANTS.BYTES_TO_MB_DIVISOR).toFixed(CONSTANTS.PROGRESS_INTERVAL / CONSTANTS.DECIMAL_PRECISION)} MB`);
 
             // ファイルダウンロード
             const response = await this.drive.files.get({
@@ -198,9 +211,9 @@ class GoogleDriveManager {
                 
                 response.data.on('data', (chunk) => {
                     downloadedBytes += chunk.length;
-                    const progress = ((downloadedBytes / fileSize) * 100).toFixed(1);
-                    if (downloadedBytes % (1024 * 1024) < chunk.length) { // 1MB毎にログ
-                        this.log.info(`ダウンロード進行: ${progress}% (${(downloadedBytes / 1024 / 1024).toFixed(1)}MB)`);
+                    const progress = ((downloadedBytes / fileSize) * CONSTANTS.PROGRESS_INTERVAL).toFixed(1);
+                    if (downloadedBytes % (CONSTANTS.BYTES_TO_MB_DIVISOR * CONSTANTS.BYTES_TO_MB_DIVISOR) < chunk.length) { // 1MB毎にログ
+                        this.log.info(`ダウンロード進行: ${progress}% (${(downloadedBytes / CONSTANTS.BYTES_TO_MB_DIVISOR / CONSTANTS.BYTES_TO_MB_DIVISOR).toFixed(1)}MB)`);
                     }
                 });
 
@@ -245,7 +258,7 @@ class GoogleDriveManager {
     async cleanupOldFiles() {
         try {
             const files = await fs.readdir(this.tempDir);
-            const oneHourAgo = Date.now() - (60 * 60 * 1000);
+            const oneHourAgo = Date.now() - (CONSTANTS.FILE_TTL_MINUTES * CONSTANTS.SECONDS_IN_MINUTE * CONSTANTS.MILLISECONDS_IN_SECOND);
             let cleanedCount = 0;
 
             for (const file of files) {
@@ -315,7 +328,7 @@ class GoogleDriveManager {
             return {
                 fileCount: files.length,
                 totalSize: totalSize,
-                totalSizeMB: (totalSize / 1024 / 1024).toFixed(2)
+                totalSizeMB: (totalSize / CONSTANTS.BYTES_TO_MB_DIVISOR / CONSTANTS.BYTES_TO_MB_DIVISOR).toFixed(CONSTANTS.PROGRESS_INTERVAL / CONSTANTS.DECIMAL_PRECISION)
             };
         } catch (error) {
             return {

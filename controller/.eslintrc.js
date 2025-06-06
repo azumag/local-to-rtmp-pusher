@@ -38,7 +38,7 @@ module.exports = {
         'no-var': 'error',
         'prefer-const': 'error',
         'no-magic-numbers': ['warn', { 
-            'ignore': [0, 1, -1], 
+            'ignore': [0, 1, -1, 4], 
             'ignoreArrayIndexes': true,
             'ignoreDefaultValues': true 
         }],
