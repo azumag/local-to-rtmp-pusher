@@ -10,6 +10,22 @@ on:
         required: false
         default: 'false'
         type: boolean
+      instance_bundle:
+        description: 'Instance bundle size'
+        required: false
+        default: 'medium_2_0'
+        type: choice
+        options:
+          - nano_2_0
+          - micro_2_0
+          - small_2_0
+          - medium_2_0
+          - large_2_0
+      destroy_first:
+        description: 'Destroy existing instance before deploy'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   AWS_REGION: ap-northeast-1
@@ -80,7 +96,7 @@ jobs:
         TF_VAR_environment: prod
         TF_VAR_project_name: streamcaster
         TF_VAR_owner: azumag
-        TF_VAR_instance_bundle_id: medium_2_0
+        TF_VAR_instance_bundle_id: ${{ github.event.inputs.instance_bundle || 'medium_2_0' }}
         TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
         TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
         TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
@@ -106,7 +122,7 @@ jobs:
         TF_VAR_environment: prod
         TF_VAR_project_name: streamcaster
         TF_VAR_owner: azumag
-        TF_VAR_instance_bundle_id: medium_2_0
+        TF_VAR_instance_bundle_id: ${{ github.event.inputs.instance_bundle || 'medium_2_0' }}
         TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
         TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
         TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
@@ -119,6 +135,13 @@ jobs:
         TF_VAR_ssh_public_key_path: ""
         TF_VAR_google_drive_api_key: AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
         
+    - name: Destroy existing instance (if requested)
+      working-directory: terraform
+      if: github.event.inputs.destroy_first == 'true'
+      run: |
+        echo "Destroying existing instance first..."
+        terraform destroy -target=aws_lightsail_instance.streamcaster -auto-approve || echo "No instance to destroy"
+        
     - name: Terraform Apply
       working-directory: terraform
       run: terraform apply -auto-approve -lock-timeout=300s
@@ -126,7 +149,7 @@ jobs:
         TF_VAR_environment: prod
         TF_VAR_project_name: streamcaster
         TF_VAR_owner: azumag
-        TF_VAR_instance_bundle_id: medium_2_0
+        TF_VAR_instance_bundle_id: ${{ github.event.inputs.instance_bundle || 'medium_2_0' }}
         TF_VAR_admin_ip_ranges: '["0.0.0.0/0"]'
         TF_VAR_web_access_cidrs: '["0.0.0.0/0"]'
         TF_VAR_monitoring_access_cidrs: '["0.0.0.0/0"]'
