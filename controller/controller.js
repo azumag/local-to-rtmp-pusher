@@ -6,6 +6,22 @@ const fs = require('fs-extra');
 const ProcessManager = require('./process_manager');
 const GoogleDriveManager = require('./google_drive_manager');
 
+// HTTP status codes
+const HTTP_STATUS = {
+    OK: 200,
+    BAD_REQUEST: 400,
+    FORBIDDEN: 403,
+    NOT_FOUND: 404,
+    INTERNAL_SERVER_ERROR: 500
+};
+
+// Configuration constants
+const CONFIG = {
+    HTTP_PORT: 8080,
+    EXIT_CODE_SUCCESS: 0,
+    EXIT_CODE_ERROR: 1
+};
+
 // ロガー設定
 const log = {
     info: (msg) => console.log(`[${new Date().toISOString()}] [INFO] ${msg}`),
@@ -114,7 +130,7 @@ app.get('/api/status', async (req, res) => {
         });
     } catch (error) {
         log.error(`Status API error: ${error.message}`);
-        res.status(500).json({ error: error.message });
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: error.message });
     }
 });
 
@@ -148,7 +164,7 @@ app.get('/api/videos', async (req, res) => {
         });
     } catch (error) {
         log.error(`Videos API error: ${error.message}`);
-        res.status(500).json({ error: error.message });
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: error.message });
     }
 });
 
@@ -463,7 +479,7 @@ app.get('/api/logs', async (req, res) => {
         });
     } catch (error) {
         log.error(`Logs API error: ${error.message}`);
-        res.status(500).json({ error: error.message });
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: error.message });
     }
 });
 
@@ -495,7 +511,7 @@ async function startServer() {
 
     log.info('システム初期化完了');
 
-    const port = process.env.PORT || 8080;
+    const port = process.env.PORT || CONFIG.HTTP_PORT;
     app.listen(port, '0.0.0.0', () => {
         log.info(`サーバーが起動しました: http://0.0.0.0:${port}`);
         log.info('Web UI: http://localhost:8080');
@@ -508,12 +524,14 @@ async function startServer() {
 // グレースフルシャットダウン
 process.on('SIGTERM', () => {
     log.info('SIGTERM received, shutting down gracefully');
-    process.exit(0);
+    // eslint-disable-next-line no-process-exit
+    process.exit(CONFIG.EXIT_CODE_SUCCESS);
 });
 
 process.on('SIGINT', () => {
     log.info('SIGINT received, shutting down gracefully');
-    process.exit(0);
+    // eslint-disable-next-line no-process-exit
+    process.exit(CONFIG.EXIT_CODE_SUCCESS);
 });
 
 // 未処理エラーのキャッチ
@@ -523,11 +541,13 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
     log.error(`Uncaught Exception: ${error.message}`);
-    process.exit(1);
+    // eslint-disable-next-line no-process-exit
+    process.exit(CONFIG.EXIT_CODE_ERROR);
 });
 
 // サーバー起動
 startServer().catch((error) => {
     log.error(`Failed to start server: ${error.message}`);
-    process.exit(1);
+    // eslint-disable-next-line no-process-exit
+    process.exit(CONFIG.EXIT_CODE_ERROR);
 });

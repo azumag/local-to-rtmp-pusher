@@ -61,12 +61,35 @@ jobs:
     - name: Check if deployment needed
       id: deploy_check
       run: |
-        if [ "${{ steps.plan.outputs.exitcode }}" = "2" ] || [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
+        # Check for infrastructure changes
+        INFRA_CHANGES=false
+        if [ "${{ steps.plan.outputs.exitcode }}" = "2" ]; then
+          INFRA_CHANGES=true
+          echo "Infrastructure changes detected"
+        fi
+        
+        # Check for application changes that require redeployment
+        APP_CHANGES=false
+        if git diff --name-only HEAD~1 HEAD | grep -E "(scripts/|controller/|config/|docker|\.env)" > /dev/null; then
+          APP_CHANGES=true
+          echo "Application changes detected:"
+          git diff --name-only HEAD~1 HEAD | grep -E "(scripts/|controller/|config/|docker|\.env)"
+        fi
+        
+        # Force deploy option
+        FORCE_DEPLOY=false
+        if [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
+          FORCE_DEPLOY=true
+          echo "Force deploy requested"
+        fi
+        
+        # Determine if deployment is needed
+        if [ "$INFRA_CHANGES" = "true" ] || [ "$APP_CHANGES" = "true" ] || [ "$FORCE_DEPLOY" = "true" ]; then
           echo "deploy_needed=true" >> $GITHUB_OUTPUT
-          echo "Deployment needed: Infrastructure changes detected or force deploy requested"
+          echo "Deployment needed: Infrastructure=$INFRA_CHANGES, Application=$APP_CHANGES, Force=$FORCE_DEPLOY"
         else
           echo "deploy_needed=false" >> $GITHUB_OUTPUT
-          echo "No deployment needed: No infrastructure changes"
+          echo "No deployment needed: No infrastructure or application changes"
         fi
         
     - name: Terraform Apply
