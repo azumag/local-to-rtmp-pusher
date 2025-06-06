@@ -8,9 +8,9 @@ while true; do
         -i "${RTMP_SERVER}" \
         -c:v libx264 \
         -preset ultrafast \
-        -b:v 1500k \
-        -maxrate 1500k \
-        -bufsize 3000k \
+        -b:v 2500k \
+        -maxrate 2500k \
+        -bufsize 6000k \
         -c:a aac \
         -b:a 64k \
         -f flv \
