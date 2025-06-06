@@ -451,4 +451,4 @@ terraform import aws_lightsail_instance.streamcaster instance-name
 **Terraform Version**: 1.6.0+  
 **AWS Provider**: ~> 5.0  
 **Tested Regions**: ap-northeast-1 (Tokyo)  
-**Last Updated**: 2025-06-06
+**Last Updated**: 2025-06-06# State cleaned for CI deployment
