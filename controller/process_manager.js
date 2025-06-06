@@ -7,8 +7,8 @@ class ProcessManager {
         this.udpSenderProcess = null;  // 動画→UDP送信プロセス
         this.currentTempFile = null;   // 現在使用中の一時ファイル
         this.currentPlaylist = null;   // 現在使用中のプレイリストファイル
-        this.isSwitching = false;      // プロセス切り替え中フラグ
         this.audioQuality = 'standard'; // 'standard' or 'high'
+        this.isSwitching = false;      // プロセス切り替え中フラグ
         this.log = {
             info: (msg) => console.log(`[${new Date().toISOString()}] [ProcessManager] [INFO] ${msg}`),
             error: (msg) => console.error(`[${new Date().toISOString()}] [ProcessManager] [ERROR] ${msg}`),

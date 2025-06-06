@@ -93,7 +93,8 @@
       "Bash(npx jest:*)",
       "Bash(npm ci:*)",
       "Bash(npm start)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

@@ -301,6 +301,107 @@
             border-left: 4px solid #2196f3;
         }
         
+        /* Toast Notification Styles */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+        }
+        
+        .toast {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 10px;
+            padding: 16px;
+            border-left: 4px solid #3498db;
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+            position: relative;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-left-color: #2ecc71;
+        }
+        
+        .toast.error {
+            border-left-color: #e74c3c;
+        }
+        
+        .toast.warning {
+            border-left-color: #f39c12;
+        }
+        
+        .toast.info {
+            border-left-color: #3498db;
+        }
+        
+        .toast-icon {
+            font-size: 20px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .toast.success .toast-icon {
+            color: #2ecc71;
+        }
+        
+        .toast.error .toast-icon {
+            color: #e74c3c;
+        }
+        
+        .toast.warning .toast-icon {
+            color: #f39c12;
+        }
+        
+        .toast.info .toast-icon {
+            color: #3498db;
+        }
+        
+        .toast-content {
+            flex: 1;
+        }
+        
+        .toast-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+        
+        .toast-message {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .toast-close {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #bdc3c7;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        
+        .toast-close:hover {
+            color: #7f8c8d;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -316,6 +417,21 @@
             
             .btn {
                 width: 100%;
+            }
+            
+            .toast-container {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+            
+            .toast {
+                transform: translateY(-100%);
+            }
+            
+            .toast.show {
+                transform: translateY(0);
             }
         }
     </style>
@@ -405,6 +521,9 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
     <script>
         // グローバル変数
         let currentVideoFile = null;
@@ -413,6 +532,82 @@
         let googledriveFiles = [];
         let activeTab = 'local';
         let isSwitchingVideo = false; // 切り替え中フラグ
+        let toastIdCounter = 0; // Toast ID管理
+
+        // Toast Notification System
+        function showToast(message, type = 'info', title = null, duration = 5000) {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) return;
+
+            const toastId = ++toastIdCounter;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.setAttribute('data-toast-id', toastId);
+
+            // アイコンの設定
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+
+            const icon = icons[type] || icons.info;
+
+            toast.innerHTML = `
+                <div class="toast-icon">${icon}</div>
+                <div class="toast-content">
+                    ${title ? `<div class="toast-title">${title}</div>` : ''}
+                    <div class="toast-message">${message}</div>
+                </div>
+                <button class="toast-close" onclick="hideToast(${toastId})">&times;</button>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            // アニメーション開始
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+
+            // 自動削除
+            if (duration > 0) {
+                setTimeout(() => {
+                    hideToast(toastId);
+                }, duration);
+            }
+
+            return toastId;
+        }
+
+        function hideToast(toastId) {
+            const toast = document.querySelector(`[data-toast-id="${toastId}"]`);
+            if (!toast) return;
+
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }
+
+        // 便利なヘルパー関数
+        function showSuccess(message, title = '成功') {
+            return showToast(message, 'success', title);
+        }
+
+        function showError(message, title = 'エラー') {
+            return showToast(message, 'error', title);
+        }
+
+        function showWarning(message, title = '警告') {
+            return showToast(message, 'warning', title);
+        }
+
+        function showInfo(message, title = '情報') {
+            return showToast(message, 'info', title);
+        }
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
@@ -448,6 +643,7 @@
                 
                 // 最優先: streaming状態の処理（フラグに関係なく）
                 if (data.stream_status === 'streaming') {
+                    const wasNotStreaming = !streamStatusIndicator.classList.contains('streaming');
                     isSwitchingVideo = false; // フラグを解除
                     streamStatusIndicator.className = 'status-indicator streaming';
                     streamStatusText.textContent = '配信中';
@@ -461,6 +657,11 @@
                         btn.disabled = false;
                     });
                     stopBtn.disabled = false;
+                    
+                    // 配信が新たに開始された場合にトーストを表示
+                    if (wasNotStreaming && currentVideoFile) {
+                        showSuccess(`「${currentVideoFile}」の配信を開始しました`, '配信開始');
+                    }
                     
                     // 配信開始時にファイルリストを更新（アクティブファイルの表示更新）
                     if (currentVideoSource === 'googledrive' && googledriveFiles.length > 0) {
@@ -596,7 +797,7 @@
                 
             } catch (error) {
                 console.error('Status refresh error:', error);
-                alert('ステータス更新エラー: ' + error.message);
+                showError('ステータス更新エラー: ' + error.message);
             }
         }
 
@@ -654,7 +855,7 @@
                 
             } catch (error) {
                 console.error('Video refresh error:', error);
-                alert('動画一覧更新エラー: ' + error.message);
+                showError('動画一覧更新エラー: ' + error.message);
             }
         }
 
@@ -730,6 +931,11 @@
                     // refreshAll(); // ダウンロード中はボタン再生成を避ける
                     // displayGoogleDriveFiles(googledriveFiles); // ダウンロード中はボタン再生成を避ける
                     console.log('Switch video success, avoiding button regeneration during download');
+                    if (source === 'googledrive') {
+                        showInfo(`Google Driveから「${videoFile}」のダウンロードを開始しました`, 'ダウンロード開始');
+                    } else {
+                        showInfo(`「${videoFile}」の配信準備を開始しました`, '配信開始');
+                    }
                 } else {
                     // エラー時は全ボタンを元に戻す
                     isSwitchingVideo = false; // フラグをリセット
@@ -743,7 +949,7 @@
                     });
                     streamStatusIndicator.className = 'status-indicator stopped';
                     streamStatusText.textContent = '停止中';
-                    alert('UDP配信開始エラー: ' + data.error);
+                    showError('UDP配信開始エラー: ' + data.error);
                     refreshAll();
                 }
                 
@@ -761,7 +967,7 @@
                 });
                 streamStatusIndicator.className = 'status-indicator stopped';
                 streamStatusText.textContent = '停止中';
-                alert('UDP配信開始エラー: ' + error.message);
+                showError('UDP配信開始エラー: ' + error.message);
                 refreshAll();
             }
         }
@@ -780,19 +986,19 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('UDP配信を停止しました');
+                    showSuccess('UDP配信を停止しました');
                     refreshAll();
                     // Google Driveファイルリストも更新
                     if (googledriveFiles.length > 0) {
                         displayGoogleDriveFiles(googledriveFiles);
                     }
                 } else {
-                    alert('UDP配信停止エラー: ' + data.error);
+                    showError('UDP配信停止エラー: ' + data.error);
                 }
                 
             } catch (error) {
                 console.error('Stop stream error:', error);
-                alert('UDP配信停止エラー: ' + error.message);
+                showError('UDP配信停止エラー: ' + error.message);
             }
         }
 
@@ -886,7 +1092,7 @@
         async function loadGoogleDriveFiles() {
             const folderLink = document.getElementById('googledriveLink').value.trim();
             if (!folderLink) {
-                alert('Google DriveフォルダのリンクまたはIDを入力してください');
+                showWarning('Google DriveフォルダのリンクまたはIDを入力してください');
                 return;
             }
 
@@ -912,6 +1118,7 @@
                 if (data.success) {
                     googledriveFiles = data.files;
                     displayGoogleDriveFiles(data.files);
+                    showSuccess(`${data.files.length}個のファイルを取得しました`, 'Google Drive');
                 } else {
                     videoList.innerHTML = `<div style="padding: 20px; text-align: center; color: #e74c3c;">${data.error}</div>`;
                 }
@@ -986,15 +1193,15 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    alert('一時ファイルを削除しました');
+                    showSuccess('一時ファイルを削除しました');
                     checkGoogleDriveStatus();
                 } else {
-                    alert('削除エラー: ' + data.error);
+                    showError('削除エラー: ' + data.error);
                 }
 
             } catch (error) {
                 console.error('Google Drive cleanup error:', error);
-                alert('削除エラー: ' + error.message);
+                showError('削除エラー: ' + error.message);
             }
         }
 
