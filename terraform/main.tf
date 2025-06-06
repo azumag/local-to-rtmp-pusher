@@ -71,11 +71,16 @@ locals {
   
   # User data script for instance initialization (nano-optimized)
   user_data = templatefile("${path.module}/templates/user-data-nano.sh", {
-    repository_url = var.repository_url
-    branch         = var.deployment_branch
-    rtmp_server    = var.rtmp_server
-    stream_key     = var.stream_key
-    log_level      = var.log_level
-    environment    = var.environment
+    repository_url          = var.repository_url
+    branch                  = var.deployment_branch
+    rtmp_server            = var.rtmp_server
+    stream_key             = var.stream_key
+    relay_target           = var.relay_target
+    log_level              = var.log_level
+    environment            = var.environment
+    google_drive_api_key   = var.google_drive_api_key
+    google_client_id       = var.google_client_id
+    google_client_secret   = var.google_client_secret
+    google_refresh_token   = var.google_refresh_token
   })
 }

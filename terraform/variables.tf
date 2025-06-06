@@ -153,6 +153,17 @@ variable "stream_key" {
   default     = ""
 }
 
+variable "relay_target" {
+  description = "RTMP relay target URL for forwarding streams"
+  type        = string
+  default     = ""
+  
+  validation {
+    condition = var.relay_target == "" || can(regex("^rtmp://", var.relay_target))
+    error_message = "Relay target must be empty or a valid RTMP URL."
+  }
+}
+
 variable "log_level" {
   description = "Application log level"
   type        = string
