@@ -104,10 +104,10 @@ jobs:
         TF_VAR_deployment_branch: main
         TF_VAR_rtmp_server: rtmp://rtmp-server:1935/live/stream
         TF_VAR_stream_key: hoge
-        TF_VAR_relay_target: rtmp://ingest.vrcdn.live/live/vrcdn_b191faef-e74f-4649-b0d9-cb0bf0a2d92cl
+        TF_VAR_relay_target: ${{ secrets.PROD_RELAY_TARGET }}
         TF_VAR_log_level: info
         TF_VAR_ssh_public_key_path: ""
-        TF_VAR_google_drive_api_key: AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
+        TF_VAR_google_drive_api_key: ${{ secrets.GOOGLE_DRIVE_API_KEY }}
       
     - name: Terraform Validate
       working-directory: terraform
@@ -130,10 +130,10 @@ jobs:
         TF_VAR_deployment_branch: main
         TF_VAR_rtmp_server: rtmp://rtmp-server:1935/live/stream
         TF_VAR_stream_key: hoge
-        TF_VAR_relay_target: rtmp://ingest.vrcdn.live/live/vrcdn_b191faef-e74f-4649-b0d9-cb0bf0a2d92cl
+        TF_VAR_relay_target: ${{ secrets.PROD_RELAY_TARGET }}
         TF_VAR_log_level: info
         TF_VAR_ssh_public_key_path: ""
-        TF_VAR_google_drive_api_key: AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
+        TF_VAR_google_drive_api_key: ${{ secrets.GOOGLE_DRIVE_API_KEY }}
         
     - name: Destroy existing instance (if requested)
       working-directory: terraform
@@ -157,10 +157,10 @@ jobs:
         TF_VAR_deployment_branch: main
         TF_VAR_rtmp_server: rtmp://rtmp-server:1935/live/stream
         TF_VAR_stream_key: hoge
-        TF_VAR_relay_target: rtmp://ingest.vrcdn.live/live/vrcdn_b191faef-e74f-4649-b0d9-cb0bf0a2d92cl
+        TF_VAR_relay_target: ${{ secrets.PROD_RELAY_TARGET }}
         TF_VAR_log_level: info
         TF_VAR_ssh_public_key_path: ""
-        TF_VAR_google_drive_api_key: AIzaSyCgKZwTpqCW3JaJH3viEHTk4GTwDcroyKs
+        TF_VAR_google_drive_api_key: ${{ secrets.GOOGLE_DRIVE_API_KEY }}
       
     - name: Get instance information
       working-directory: terraform
