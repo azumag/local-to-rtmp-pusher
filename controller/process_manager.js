@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -23,6 +23,24 @@ class ProcessManager {
         this.log.info(`音声品質設定: ${quality}`);
     }
 
+    // 動画の解像度を取得
+    getVideoResolution(videoPath) {
+        try {
+            const cmd = `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "${videoPath}"`;
+            const output = execSync(cmd, { encoding: 'utf8' }).trim();
+            
+            if (output && output.includes('x')) {
+                const [width, height] = output.split('x').map(Number);
+                return { width, height };
+            }
+            
+            return null;
+        } catch (error) {
+            this.log.warning(`動画解像度取得エラー: ${error.message}`);
+            return null;
+        }
+    }
+
     // 音声フィルターとエンコード設定を取得
     getAudioSettings() {
         if (this.audioQuality === 'high') {
@@ -42,6 +60,13 @@ class ProcessManager {
                 filter: ['-af', 'volume=1.3,compand=0.3|0.3:1|1:-90/-60|-60/-40|-40/-30|-20/-20:6:0:-90:0.2'] // 軽量版
             };
         }
+    }
+
+    // 映像設定を取得（すべてコピーモード）
+    getVideoSettings() {
+        return {
+            codec: ['-c:v', 'copy']
+        };
     }
 
     // UDPストリーミング開始 (動画→UDP送信)
@@ -71,16 +96,25 @@ class ProcessManager {
                 throw new Error(`standby.mp4が見つかりません: ${standbyVideoPath}`);
             }
             
-            // 音声設定を取得
+            // 音声・映像設定を取得
             const audioSettings = this.getAudioSettings();
+            const videoSettings = this.getVideoSettings();
+            
+            this.log.info('すべての動画をコピーモードで処理');
             
             // メイン動画のみを再生するコマンド
             const args = [
                 '-re',
                 '-i', videoPath,
                 '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
-                // 映像設定
-                '-c:v', 'copy',
+                // 映像設定（FullHD出力、アスペクト比維持）
+                ...videoSettings.codec,
+                ...(videoSettings.preset || []),
+                ...(videoSettings.crf || []),
+                ...(videoSettings.maxrate || []),
+                ...(videoSettings.bufsize || []),
+                ...(videoSettings.filter || []),
+                ...(videoSettings.pixelFormat || []),
                 // 音声設定（動的に選択）
                 ...audioSettings.codec,
                 ...audioSettings.sampleRate,
@@ -164,16 +198,25 @@ class ProcessManager {
                 throw new Error(`standby.mp4が見つかりません: ${standbyVideoPath}`);
             }
             
-            // 音声設定を取得
+            // 音声・映像設定を取得
             const audioSettings = this.getAudioSettings();
+            const videoSettings = this.getVideoSettings();
+            
+            this.log.info('すべての動画をコピーモードで処理');
             
             // メイン動画のみを再生するコマンド
             const args = [
                 '-re',
                 '-i', videoPath,
                 '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
-                // 映像設定
-                '-c:v', 'copy',
+                // 映像設定（FullHD出力、アスペクト比維持）
+                ...videoSettings.codec,
+                ...(videoSettings.preset || []),
+                ...(videoSettings.crf || []),
+                ...(videoSettings.maxrate || []),
+                ...(videoSettings.bufsize || []),
+                ...(videoSettings.filter || []),
+                ...(videoSettings.pixelFormat || []),
                 // 音声設定（動的に選択）
                 ...audioSettings.codec,
                 ...audioSettings.sampleRate,
@@ -299,16 +342,23 @@ class ProcessManager {
         try {
             this.log.info('standby動画のループを開始します...');
             
-            // 音声設定を取得
+            // 音声・映像設定を取得
             const audioSettings = this.getAudioSettings();
+            const videoSettings = this.getVideoSettings();
             
             const args = [
                 '-re',
                 '-stream_loop', '-1',
                 '-i', standbyVideoPath,
                 '-avoid_negative_ts', 'make_zero', '-fflags', '+genpts',
-                // 映像設定
-                '-c:v', 'copy',
+                // 映像設定（FullHD出力、アスペクト比維持）
+                ...videoSettings.codec,
+                ...(videoSettings.preset || []),
+                ...(videoSettings.crf || []),
+                ...(videoSettings.maxrate || []),
+                ...(videoSettings.bufsize || []),
+                ...(videoSettings.filter || []),
+                ...(videoSettings.pixelFormat || []),
                 // 音声設定（動的に選択）
                 ...audioSettings.codec,
                 ...audioSettings.sampleRate,
