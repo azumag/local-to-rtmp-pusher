@@ -28,6 +28,10 @@ resource "aws_lightsail_static_ip_attachment" "streamcaster" {
   static_ip_name = aws_lightsail_static_ip.streamcaster[0].name
   instance_name  = aws_lightsail_instance.streamcaster.name
   
+  lifecycle {
+    create_before_destroy = true
+  }
+  
   depends_on = [
     aws_lightsail_instance.streamcaster,
     aws_lightsail_static_ip.streamcaster
