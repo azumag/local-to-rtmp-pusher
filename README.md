@@ -7,7 +7,7 @@
 
 **StreamCaster** is a professional-grade UDP-to-RTMP streaming system that enables dynamic video switching without interrupting live streams. Perfect for content creators, live streaming setups, and broadcast applications.
 
-🚀 **Now with automated CI/CD deployment!** Push to main branch and watch your changes deploy automatically to AWS Lightsail.
+🚀 **Now with automated CI/CD deployment!** Push to main branch and watch your changes deploy automatically to AWS Lightsail. Last updated: 2025-06-06 18:13 JST
 
 ## ✨ Key Features
 
