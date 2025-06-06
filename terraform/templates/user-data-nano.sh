@@ -2,6 +2,7 @@
 
 # StreamCaster Nano Instance Deployment Script
 # Optimized for AWS Lightsail nano instance (1GB RAM)
+# Deployment Timestamp: ${deployment_timestamp}
 
 set -e  # Exit on any error
 

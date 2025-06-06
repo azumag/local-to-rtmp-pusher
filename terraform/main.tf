@@ -70,6 +70,7 @@ locals {
   ]
   
   # User data script for instance initialization (nano-optimized)
+  # Include timestamp to force instance recreation on each deployment
   user_data = templatefile("${path.module}/templates/user-data-nano.sh", {
     repository_url          = var.repository_url
     branch                  = var.deployment_branch
@@ -82,5 +83,6 @@ locals {
     google_client_id       = var.google_client_id
     google_client_secret   = var.google_client_secret
     google_refresh_token   = var.google_refresh_token
+    deployment_timestamp   = timestamp()
   })
 }
