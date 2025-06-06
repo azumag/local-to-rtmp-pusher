@@ -57,15 +57,21 @@ jobs:
       working-directory: terraform
       run: |
         # Check if state is locked and force unlock if necessary
-        if ! terraform plan -detailed-exitcode -lock-timeout=10s >/dev/null 2>&1; then
-          echo "State appears to be locked, attempting to force unlock..."
-          # Get the lock ID from the error and force unlock
-          LOCK_INFO=$(terraform plan -detailed-exitcode -lock-timeout=1s 2>&1 | grep "ID:" | awk '{print $2}' | head -1 || echo "")
-          if [ ! -z "$LOCK_INFO" ]; then
-            echo "Found lock ID: $LOCK_INFO"
-            echo "yes" | terraform force-unlock "$LOCK_INFO" || echo "Force unlock failed or lock already released"
+        echo "Checking for state locks..."
+        LOCK_ERROR=$(terraform plan -detailed-exitcode -lock-timeout=5s 2>&1 | tee /dev/stderr | grep "Lock Info:" -A 10 || echo "")
+        
+        if echo "$LOCK_ERROR" | grep -q "Lock Info:"; then
+          echo "State is locked, attempting to force unlock..."
+          LOCK_ID=$(echo "$LOCK_ERROR" | grep "ID:" | awk '{print $2}' | head -1)
+          
+          if [ ! -z "$LOCK_ID" ] && [ "$LOCK_ID" != "" ]; then
+            echo "Found lock ID: $LOCK_ID"
+            echo "Forcing unlock..."
+            echo "yes" | terraform force-unlock "$LOCK_ID" || echo "Force unlock failed or lock already released"
+            echo "Waiting 10 seconds for unlock to propagate..."
+            sleep 10
           else
-            echo "No specific lock ID found, but will proceed with plan"
+            echo "Could not extract lock ID from error message"
           fi
         else
           echo "State is not locked, proceeding normally"
