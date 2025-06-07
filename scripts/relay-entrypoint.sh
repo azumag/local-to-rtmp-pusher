@@ -13,6 +13,9 @@ while true; do
         -bufsize 6000k \
         -c:a aac \
         -b:a 64k \
+        -async 1 \
+        -copyts \
+        -vsync passthrough \
         -f flv \
         "${RELAY_TARGET}"    
 

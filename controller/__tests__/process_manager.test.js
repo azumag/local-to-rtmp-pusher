@@ -78,6 +78,8 @@ describe('ProcessManager', () => {
                 '-af', 'volume=1.3,compand=0.3|0.3:1|1:-90/-60|-60/-40|-40/-30|-20/-20:6:0:-90:0.2',
                 '-f', 'mpegts',
                 '-async', '1',
+                '-copyts',
+                '-vsync', 'passthrough',
                 '-buffer_size', '6291456',
                 'udp://receiver:1234'
             ]);

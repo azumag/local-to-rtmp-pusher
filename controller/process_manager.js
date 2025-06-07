@@ -130,6 +130,8 @@ class ProcessManager {
                 ...audioSettings.filter,
                 '-f', 'mpegts',
                 '-async', '1',
+                '-copyts',
+                '-vsync', 'passthrough',
                 '-buffer_size', '6291456',
                 'udp://receiver:1234'
             ];
